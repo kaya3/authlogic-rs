@@ -1,0 +1,24 @@
+[package]
+name = "authlogic"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+keywords = ["actix", "auth", "session", "password"]
+categories = ["authentication", "web-programming"]
+repository = "https://github.com/kaya3/authlogic-rs"
+readme = "README.md"
+
+[dependencies]
+actix-web = "4.9.0"
+argon2 = "0.5.3"
+base64 = "0.22.1"
+constant_time_eq = "0.3.1"
+log = "0.4.22"
+password-hash = "0.5.0"
+rand = "0.8.5"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+sha2 = "0.10.8"
+sqlx = { version = "0.8.3", optional = true }
+trait-variant = "0.1.2"
+zeroize = "1.8.1"
