@@ -52,17 +52,16 @@ impl NoCustomChallenges {
 
 #[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct ChallengeData<A: AppTypes> {
-    #[diesel(embed)]
+    #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user: A::User,
     
-    #[diesel(sql_type = diesel::sql_types::Text)]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Text))]
     pub challenge: String,
     
-    #[diesel(deserialize_as = String)]
-    #[diesel(sql_type = diesel::sql_types::Text)]
+    #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = diesel::sql_types::Text))]
     pub code_hash: Secret,
     
-    #[diesel(sql_type = diesel::sql_types::Timestamp)]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Timestamp))]
     pub expires: A::DateTime,
 }
 

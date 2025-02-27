@@ -18,17 +18,16 @@ use crate::{
 
 #[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct SessionData<A: AppTypes> {
-    #[diesel(embed)]
+    #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user: A::User,
     
-    #[diesel(embed)]
+    #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user_state: UserState,
     
-    #[diesel(deserialize_as = String)]
-    #[diesel(sql_type = diesel::sql_types::Text)]
+    #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = diesel::sql_types::Text))]
     pub token_hash: Secret,
     
-    #[diesel(sql_type = diesel::sql_types::Timestamp)]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Timestamp))]
     pub expires: A::DateTime,
 }
 

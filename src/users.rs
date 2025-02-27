@@ -20,14 +20,13 @@ pub trait UserID<T> {
 
 #[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct UserData<A: AppTypes> {
-    #[diesel(embed)]
+    #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user: A::User,
     
-    #[diesel(sql_type = diesel::sql_types::Text)]
-    #[diesel(deserialize_as = String)]
+    #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = diesel::sql_types::Text))]
     pub password_hash: PasswordHash,
     
-    #[diesel(embed)]
+    #[cfg_attr(feature = "diesel", diesel(embed))]
     pub state: UserState,
 }
 
