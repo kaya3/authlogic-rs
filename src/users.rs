@@ -18,17 +18,28 @@ pub trait UserID<T> {
     fn set_id(&mut self, new_id: T);
 }
 
+#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct UserData<A: AppTypes> {
+    #[diesel(embed)]
     pub user: A::User,
+    
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    #[diesel(deserialize_as = String)]
     pub password_hash: PasswordHash,
+    
+    #[diesel(embed)]
     pub state: UserState,
 }
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow, sqlx::Type))]
+#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct UserState {
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
     pub is_suspended: bool,
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
     pub require_email_verification: bool,
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
     pub require_password_change: bool,
 }
 
@@ -66,7 +77,7 @@ impl UserState {
 /// 
 /// Returns the registered user with their unique id.
 pub async fn register_new_user<A: App>(
-    app: &A,
+    app: &mut A,
     user: A::User,
     password: Secret,
 ) -> Result<A::User, A::Error> {
@@ -83,7 +94,7 @@ pub async fn register_new_user<A: App>(
 /// 
 /// Returns the registered user with their unique id.
 pub async fn register_new_user_without_password<A: App>(
-    app: &A,
+    app: &mut A,
     user: A::User,
 ) -> Result<A::User, A::Error> {
     register(app, user, None, PasswordHash::NONE)
@@ -97,7 +108,7 @@ pub async fn register_new_user_without_password<A: App>(
 /// 
 /// Returns the registered user with their unique id.
 pub async fn register_new_user_with_temporary_password<A: App>(
-    app: &A,
+    app: &mut A,
     user: A::User,
 ) -> Result<A::User, A::Error> {
     let (password, hash) = hashing::generate_password_and_hash()?;
@@ -107,7 +118,7 @@ pub async fn register_new_user_with_temporary_password<A: App>(
 }
 
 pub async fn change_password<A: App>(
-    app: &A,
+    app: &mut A,
     auth: Auth<A>,
     old_password: Option<Secret>,
     new_password: Secret,
@@ -125,7 +136,8 @@ pub async fn change_password<A: App>(
     // Verify the old password.
     let data = app
         .get_user_data_by_id(user.id())
-        .await?
+        .await
+        .map_err(Into::into)?
         .ok_or(Error::UserDataQueryFailed {user_id: user.id().into()})?;
     
     // If the account is password-protected, verify the old password
@@ -142,22 +154,24 @@ pub async fn change_password<A: App>(
     // Update the password in the database.
     let new_hash = hashing::generate_password_hash(&new_password)?;
     app.update_password(&user, new_hash, false)
-        .await?;
+        .await
+        .map_err(Into::into)?;
 
     // Notify the user that their password has been changed, in case they
     // didn't change it themselves.
     app.send_notification(&user, Notification::PasswordChanged)
-        .await?;
+        .await
+        .map_err(Into::into)?;
 
     Ok(())
 }
 
-pub async fn request_password_reset<A: App>(app: &A, user: &A::User) -> Result<(), A::Error> {
+pub async fn request_password_reset<A: App>(app: &mut A, user: &A::User) -> Result<(), A::Error> {
     issue_challenge(app, user, Challenge::ResetPassword)
         .await
 }
 
-fn check_password_strength<A: App>(app: &A, password: &Secret) -> Result<(), Error> {
+fn check_password_strength<A: App>(app: &mut A, password: &Secret) -> Result<(), Error> {
     if password.0.len() < app.minimum_password_length() {
         return Err(Error::PasswordTooShort);
     }
@@ -165,7 +179,7 @@ fn check_password_strength<A: App>(app: &A, password: &Secret) -> Result<(), Err
 }
 
 async fn register<A: App>(
-    app: &A,
+    app: &mut A,
     mut user: A::User,
     temporary_password: Option<Secret>,
     password_hash: PasswordHash,
@@ -173,7 +187,7 @@ async fn register<A: App>(
     // Insert the user into the database. This has to be done first to get the
     // user's new unique id, which might be needed by the app mailer.
     let user_data = UserData {
-        user,
+        user: user.clone(),
         password_hash,
         state: UserState {
             is_suspended: false,
@@ -181,11 +195,11 @@ async fn register<A: App>(
             require_email_verification: temporary_password.is_none(),
         },
     };
-    let user_id = app.insert_user(&user_data)
-        .await?;
+    let user_id = app.insert_user(user_data)
+        .await
+        .map_err(Into::into)?;
 
     // Update the user's id.
-    user = user_data.user;
     user.set_id(user_id);
 
     // Send the notification or challenge email.
@@ -194,10 +208,12 @@ async fn register<A: App>(
             let notification = Notification::UserRegistered {temporary_password};
             app.send_notification(&user, notification)
                 .await
+                .map_err(Into::into)
         },
         None => {
             issue_challenge(app, &user, Challenge::VerifyNewUser)
                 .await
+                .map_err(Into::into)
         }
     };
 
@@ -205,7 +221,8 @@ async fn register<A: App>(
         // If sending the email fails, the challenge code or temporary password
         // are lost, and the user will never be able to log in.
         app.delete_user(user_id)
-            .await?;
+            .await
+            .map_err(Into::into)?;
 
         return Err(e);
     }

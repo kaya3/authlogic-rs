@@ -16,22 +16,32 @@ use crate::{
     users::{UserID, UserState},
 };
 
+#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct SessionData<A: AppTypes> {
+    #[diesel(embed)]
     pub user: A::User,
+    
+    #[diesel(embed)]
     pub user_state: UserState,
+    
+    #[diesel(deserialize_as = String)]
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub token_hash: Secret,
+    
+    #[diesel(sql_type = diesel::sql_types::Timestamp)]
     pub expires: A::DateTime,
 }
 
 pub async fn login<A: App>(
-    app: &A,
+    app: &mut A,
     user_identifier: &str,
     password: Secret,
     request: &HttpRequest,
 ) -> Result<A::User, A::Error> {
     let Some(user_data) = app
         .get_user_data_by_identifier(user_identifier)
-        .await?
+        .await
+        .map_err(Into::into)?
     else {
         return Error::NoSuchUser.as_app_err();
     };
@@ -58,7 +68,7 @@ pub async fn login<A: App>(
 }
 
 impl<A: App> MaybeAuth<A> {
-    pub async fn logout(self, app: &A, request: &HttpRequest) -> Result<(), A::Error> {
+    pub async fn logout(self, app: &mut A, request: &HttpRequest) -> Result<(), A::Error> {
         if let MaybeAuth::Authenticated(auth) = self {
             auth.logout(app, request)
                 .await?;
@@ -69,11 +79,12 @@ impl<A: App> MaybeAuth<A> {
 }
 
 impl<A: App> Auth<A> {
-    pub async fn logout(self, app: &A, request: &HttpRequest) -> Result<(), A::Error> {
+    pub async fn logout(self, app: &mut A, request: &HttpRequest) -> Result<(), A::Error> {
         log::debug!("Logging out user #{}", self.user.id());
 
         app.delete_session_by_id(self.session_id)
-            .await?;
+            .await
+            .map_err(Into::into)?;
         AuthTokenAction::Revoke
             .insert_into_request(request);
 
@@ -84,7 +95,7 @@ impl<A: App> Auth<A> {
 /// Begins a new session for the user who completed the challenge, or renews an
 /// existing session if the user is already logged in.
 pub(crate) async fn on_successful_challenge<A: App>(
-    app: &A,
+    app: &mut A,
     user: &A::User,
     request: &HttpRequest,
 ) -> Result<(), A::Error> {
@@ -117,7 +128,7 @@ pub(crate) async fn on_successful_challenge<A: App>(
 /// a needed action (if any) to update the client's cookie in case their
 /// token is renewed, or the token is expired or otherwise invalid.
 pub(crate) async fn authenticate_by_session_token<A: App>(
-    app: &A,
+    app: &mut A,
     request: &ServiceRequest,
 ) -> Result<MaybeAuth<A>, A::Error> {
     let revoke_cookie = || {
@@ -146,7 +157,8 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
     log::debug!("Request has cookie claiming session #{}", session_id);
 
     let Some(session) = app.get_session_by_id(session_id)
-        .await?
+        .await
+        .map_err(Into::into)?
     else {
         // The unpacked cookie refers to a session ID which doesn't exist in
         // the database. Could be an old cookie from an expired session, or an
@@ -159,7 +171,8 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
         // The session exists in the database, but is expired - delete it.
         log::debug!("Session #{} has expired; revoking", session_id);
         app.delete_session_by_id(session_id)
-            .await?;
+            .await
+            .map_err(Into::into)?;
         return revoke_cookie();
     }
 
@@ -199,10 +212,11 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
 ///
 /// Returns the new session token. An `AuthTokenAction` must be inserted into
 /// the request in order to issue the new session token cookie.
-async fn begin_session_for_user<A: App>(app: &A, user: &A::User) -> Result<Secret, A::Error> {
+async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<Secret, A::Error> {
     let (session_token, hash) = hashing::generate_session_token_and_hash();
     let session_id = app.insert_session(user, hash, expiry_time(app))
-        .await?;
+        .await
+        .map_err(Into::into)?;
 
     log::debug!("Beginning session #{} for user #{}", session_id, user.id());
 
@@ -211,12 +225,13 @@ async fn begin_session_for_user<A: App>(app: &A, user: &A::User) -> Result<Secre
 
 /// Renews the session with the given id, updates the session in the database,
 /// and returns the new session token.
-async fn renew_by_id<A: App>(app: &A, session_id: A::ID) -> Result<Secret, A::Error> {
+async fn renew_by_id<A: App>(app: &mut A, session_id: A::ID) -> Result<Secret, A::Error> {
     log::debug!("Renewing session #{}", session_id);
 
     let (session_token, hash) = hashing::generate_session_token_and_hash();
     app.update_session_by_id(session_id, hash, expiry_time(app))
-        .await?;
+        .await
+        .map_err(Into::into)?;
 
     Ok(tokens::pack(session_id, session_token))
 }
@@ -230,7 +245,7 @@ fn expiry_time<A: App>(app: &A) -> A::DateTime {
 
 /// Determines whether the current time is past the time at which the session
 /// should be renewed.
-fn should_renew<A: App>(app: &A, expires: A::DateTime) -> bool {
+fn should_renew<A: App>(app: &mut A, expires: A::DateTime) -> bool {
     let renewal_period_hours = app.session_expire_after_hours() - app.session_renew_after_hours();
     let renewal_period = Duration::from_secs(3600 * renewal_period_hours as u64);
     app.time_now() + renewal_period >= expires

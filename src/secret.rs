@@ -6,6 +6,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 /// 
 /// Secrets are redacted in `std::fmt::Debug` displays, and are automatically
 /// zeroed-out in memory when the value is dropped.
+#[cfg_attr(feature = "diesel", derive(diesel_derive_newtype::DieselNewType))]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
 pub struct Secret(pub(crate) String);
 
@@ -16,8 +17,8 @@ pub struct Secret(pub(crate) String);
 /// 
 /// Secrets are redacted in `std::fmt::Debug` displays, and are automatically
 /// zeroed-out in memory when the value is dropped.
+#[cfg_attr(feature = "diesel", derive(diesel_derive_newtype::DieselNewType))]
 #[cfg_attr(feature = "sqlx", derive(sqlx::Type), sqlx(transparent))]
-#[repr(transparent)]
 pub struct PasswordHash(pub(crate) Option<Secret>);
 
 impl Secret {

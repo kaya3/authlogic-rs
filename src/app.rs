@@ -7,7 +7,7 @@ use crate::{
     NIST_MINIMUM_PASSWORD_LENGTH,
 };
 
-pub trait App: AppConfig + AppDb + AppMailer + AppTypes + Clone + 'static {
+pub trait App: AppConfig + AppDb + AppMailer + AppTypes + 'static {
     /// Returns the current time.
     fn time_now(&self) -> Self::DateTime;
 }
@@ -87,115 +87,119 @@ pub trait AppConfig {
 /// library to store and retrieve data about users, sessions and challenges.
 #[trait_variant::make(Send)]
 pub trait AppDb: AppTypes {
+    type DbError: Into<Self::Error>;
+    
     /// Gets a user's data, including their password hash and active state, by
     /// their id.
     ///
     /// Returns `None` if there is no user with that identifier.
     async fn get_user_data_by_id(
-        &self,
+        &mut self,
         user_id: Self::ID,
-    ) -> Result<Option<UserData<Self>>, Self::Error>;
+    ) -> Result<Option<UserData<Self>>, Self::DbError>;
 
     /// Gets a user's data, including their password hash and active state, by
     /// their identifier (e.g. username or email).
     ///
     /// Returns `None` if there is no user with that identifier.
     async fn get_user_data_by_identifier(
-        &self,
+        &mut self,
         user_identifier: &str,
-    ) -> Result<Option<UserData<Self>>, Self::Error>;
+    ) -> Result<Option<UserData<Self>>, Self::DbError>;
 
     /// Inserts a new user, returning the new user's unique id.
     async fn insert_user(
-        &self,
-        user_data: &UserData<Self>,
-    ) -> Result<Self::ID, Self::Error>;
+        &mut self,
+        user_data: UserData<Self>,
+    ) -> Result<Self::ID, Self::DbError>;
 
     /// Updates an unverified user to mark them as verified.
-    async fn verify_user(&self, user: &Self::User) -> Result<(), Self::Error>;
+    async fn verify_user(&mut self, user: &Self::User) -> Result<(), Self::DbError>;
 
     /// Updates a user's stored password hash, also recording whether they are
     /// subsequently required to change their password.
     async fn update_password(
-        &self,
+        &mut self,
         user: &Self::User,
         password_hash: PasswordHash,
         then_require_change: bool,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::DbError>;
 
     /// Deletes a user by their id, if they exist. It is not an error to
     /// attempt to delete a non-existent user.
-    async fn delete_user(&self, user_id: Self::ID) -> Result<(), Self::Error>;
+    async fn delete_user(&mut self, user_id: Self::ID) -> Result<(), Self::DbError>;
 
     /// Gets the data for a session, including the user, whether the user is
     /// active, the session token hash, and the session expiry time.
     ///
     /// Returns `None` if there is no session with that id.
     async fn get_session_by_id(
-        &self,
+        &mut self,
         session_id: Self::ID,
-    ) -> Result<Option<SessionData<Self>>, Self::Error>;
+    ) -> Result<Option<SessionData<Self>>, Self::DbError>;
 
     /// Inserts a new session, returning the new session's unique id.
     async fn insert_session(
-        &self,
+        &mut self,
         user: &Self::User,
         token_hash: Secret,
         expires: Self::DateTime,
-    ) -> Result<Self::ID, Self::Error>;
+    ) -> Result<Self::ID, Self::DbError>;
 
     /// Updates a session's stored token hash and expiry time.
     async fn update_session_by_id(
-        &self,
+        &mut self,
         session_id: Self::ID,
         new_token_hash: Secret,
         expires: Self::DateTime,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::DbError>;
 
     /// Deletes a session by its id, if it exists. It is not an error to
     /// attempt to delete a non-existent session.
-    async fn delete_session_by_id(&self, session_id: Self::ID) -> Result<(), Self::Error>;
+    async fn delete_session_by_id(&mut self, session_id: Self::ID) -> Result<(), Self::DbError>;
 
     /// Gets the data for a challenge, including the user, the challenge type,
     /// the challenge code hash, and the challenge expiry time.
     ///
     /// Returns `None` if there is no challenge with that id.
     async fn get_challenge_by_id(
-        &self,
+        &mut self,
         challenge_id: Self::ID,
-    ) -> Result<Option<ChallengeData<Self>>, Self::Error>;
+    ) -> Result<Option<ChallengeData<Self>>, Self::DbError>;
 
     /// Inserts a new challenge, returning the new challenge's id.
     async fn insert_challenge(
-        &self,
+        &mut self,
         user: &Self::User,
         challenge: &str,
         code_hash: Secret,
         expires: Self::DateTime,
-    ) -> Result<Self::ID, Self::Error>;
+    ) -> Result<Self::ID, Self::DbError>;
 
     /// Deletes a challenge by its id, if it exists. It is not an error to
     /// attempt to delete a non-existent challenge.
-    async fn delete_challenge_by_id(&self, challenge_id: Self::ID) -> Result<(), Self::Error>;
+    async fn delete_challenge_by_id(&mut self, challenge_id: Self::ID) -> Result<(), Self::DbError>;
 }
 
 /// This trait defines functions which will be used by the authentication
 /// library to send email notifications and challenges to users.
 #[trait_variant::make(Send)]
 pub trait AppMailer: AppTypes {
+    type MailError: Into<Self::Error>;
+    
     /// Sends an email notification to the given user.
     async fn send_notification(
-        &self,
+        &mut self,
         user: &Self::User,
         notification: Notification,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::MailError>;
 
     /// Sends an email message to the given user, with a link to complete a
     /// challenge. The link must match a route which invokes `complete_challenge(code)`.
     async fn send_challenge(
-        &self,
+        &mut self,
         user: &Self::User,
         challenge: Challenge<Self>,
         code: Secret,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), Self::MailError>;
 }

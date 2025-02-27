@@ -62,25 +62,33 @@ impl<A: App> MaybeAuth<A> {
 /// Gets the authentication state for the request. This can be called from
 /// route handlers, or `actix_web::FromRequest` implementations.
 pub fn maybe_auth_from_request<A: App>(request: &impl HttpMessage) -> MaybeAuth<A> {
-    request
-        .extensions()
-        .get::<Auth<A>>()
-        .cloned()
-        .map_or(MaybeAuth::Unauthenticated, MaybeAuth::Authenticated)
+    let exts = request.extensions();
+    let auth = exts.get::<Auth<A>>();
+    
+    match auth {
+        Some(auth) => MaybeAuth::Authenticated(Auth {
+            user: auth.user.clone(),
+            session_id: auth.session_id,
+            _deny_public_constructor: (),
+        }),
+        None => MaybeAuth::Unauthenticated,
+    }
 }
 
 /// Gets the authenticated state for the request, or returns an error if
 /// the request is not authenticated. This can be called from route
 /// handlers, or `actix_web::FromRequest` implementations.
 pub fn require_auth_from_request<A: App>(request: &impl HttpMessage) -> Result<Auth<A>, A::Error> {
-    maybe_auth_from_request::<A>(request).require()
+    maybe_auth_from_request::<A>(request)
+        .require()
 }
 
 /// Gets the authenticated user for the request, or returns an error if the
 /// request is not authenticated. This can be called from route handlers,
 /// or `actix_web::FromRequest` implementations.
 pub fn require_user_from_request<A: App>(request: &impl HttpMessage) -> Result<A::User, A::Error> {
-    require_auth_from_request::<A>(request).map(|auth| auth.user)
+    require_auth_from_request::<A>(request)
+        .map(|auth| auth.user)
 }
 
 impl<A: App> From<MaybeAuth<A>> for Option<Auth<A>> {

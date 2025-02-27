@@ -1,7 +1,7 @@
 [package]
 name = "authlogic"
 description = "Authentication logic for Actix Web applications"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 keywords = ["actix", "auth", "session", "password"]
@@ -14,6 +14,8 @@ actix-web = "4.9.0"
 argon2 = "0.5.3"
 base64 = "0.22.1"
 constant_time_eq = "0.3.1"
+diesel = { version = "2.2.0", optional = true }
+diesel-derive-newtype = { version = "2.1.2", optional = true }
 log = "0.4.22"
 password-hash = "0.5.0"
 rand = "0.8.5"
@@ -23,3 +25,7 @@ sha2 = "0.10.8"
 sqlx = { version = "0.8.3", optional = true }
 trait-variant = "0.1.2"
 zeroize = "1.8.1"
+
+[features]
+diesel = ["dep:diesel", "dep:diesel-derive-newtype"]
+sqlx = ["dep:sqlx"]

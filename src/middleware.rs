@@ -12,20 +12,20 @@ use crate::{
     maybe_auth::MaybeAuth,
     sessions::authenticate_by_session_token,
     token_actions::AuthTokenAction,
-    users::UserID,
+    users::UserID, AppTypes,
 };
 
 pub async fn middleware<A: App>(
-    request: ServiceRequest,
+    mut request: ServiceRequest,
     next: Next<impl MessageBody>,
-) -> Result<ServiceResponse<impl MessageBody>, Error> {
-    let app: A = request
-        .app_data::<A>()
-        .expect("App state should be available from actix_web app data")
-        .clone();
+) -> Result<ServiceResponse<impl MessageBody>, Error>
+    where A: actix_web::FromRequest<Error = <A as AppTypes>::Error>,
+{
+    let mut app = request.extract::<A>()
+        .await?;
 
     // Authenticate by the cookie, if there is one
-    let auth = authenticate_by_session_token(&app, &request)
+    let auth = authenticate_by_session_token(&mut app, &request)
         .await?;
 
     match &auth {

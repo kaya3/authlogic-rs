@@ -50,15 +50,24 @@ impl NoCustomChallenges {
     }
 }
 
+#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct ChallengeData<A: AppTypes> {
+    #[diesel(embed)]
     pub user: A::User,
+    
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub challenge: String,
+    
+    #[diesel(deserialize_as = String)]
+    #[diesel(sql_type = diesel::sql_types::Text)]
     pub code_hash: Secret,
+    
+    #[diesel(sql_type = diesel::sql_types::Timestamp)]
     pub expires: A::DateTime,
 }
 
 pub async fn issue_login_challenge<A: App>(
-    app: &A,
+    app: &mut A,
     user: &A::User,
 ) -> Result<(), A::Error> {
     issue_challenge(app, user, Challenge::LogIn)
@@ -66,7 +75,7 @@ pub async fn issue_login_challenge<A: App>(
 }
 
 pub async fn issue_custom_challenge<A: App>(
-    app: &A,
+    app: &mut A,
     user: &A::User,
     challenge: A::CustomChallenge,
 ) -> Result<(), A::Error> {
@@ -75,7 +84,7 @@ pub async fn issue_custom_challenge<A: App>(
 }
 
 pub(crate) async fn issue_challenge<A: App>(
-    app: &A,
+    app: &mut A,
     user: &A::User,
     challenge: Challenge<A>,
 ) -> Result<(), A::Error> {
@@ -87,7 +96,8 @@ pub(crate) async fn issue_challenge<A: App>(
     let challenge_str = to_json(&challenge)?;
     let challenge_id = app
         .insert_challenge(user, &challenge_str, code_hash, expires)
-        .await?;
+        .await
+        .map_err(Into::into)?;
     let code = tokens::pack(challenge_id, code);
     
     // Send challenge email
@@ -97,16 +107,17 @@ pub(crate) async fn issue_challenge<A: App>(
         // Failed to send the challenge link by email. The challenge code is now
         // unusable, since the link will not be received; delete it.
         app.delete_challenge_by_id(challenge_id)
-            .await?;
+            .await
+            .map_err(Into::into)?;
 
-        return Err(e);
+        return Err(e.into());
     }
 
     Ok(())
 }
 
 pub async fn complete_challenge<A: App>(
-    app: &A,
+    app: &mut A,
     code: Secret,
     request: &HttpRequest,
 ) -> Result<(A::User, Challenge<A>), A::Error> {
@@ -115,13 +126,15 @@ pub async fn complete_challenge<A: App>(
 
     let data = app
         .get_challenge_by_id(challenge_id)
-        .await?
+        .await
+        .map_err(Into::into)?
         .ok_or(Error::IncorrectChallengeCode)?;
 
     if app.time_now() >= data.expires {
         log::debug!("Challenge #{} has expired; deleting", challenge_id);
         app.delete_challenge_by_id(challenge_id)
-            .await?;
+            .await
+            .map_err(Into::into)?;
 
         return Error::IncorrectChallengeCode.as_app_err();
     }
@@ -143,12 +156,14 @@ pub async fn complete_challenge<A: App>(
             // Update the database to disable password authentication for this
             // user, and require them to later change it.
             app.update_password(&user, PasswordHash::NONE, true)
-                .await?;
+                .await
+                .map_err(Into::into)?;
         },
         Challenge::VerifyNewUser {..} => {
             log::info!("Successful email verification challenge");
             app.verify_user(&user)
-                .await?;
+                .await
+                .map_err(Into::into)?;
         },
         Challenge::LogIn => {
             // All successful challenges result in an authenticated session;
@@ -168,7 +183,8 @@ pub async fn complete_challenge<A: App>(
     // Do this last. If anything before this returns an error, we want the
     // challenge to still exist in the database so the user can try again.
     app.delete_challenge_by_id(challenge_id)
-        .await?;
+        .await
+        .map_err(Into::into)?;
 
     Ok((user, challenge))
 }
