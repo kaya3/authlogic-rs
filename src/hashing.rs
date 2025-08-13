@@ -26,26 +26,29 @@ pub const CHALLENGE_CODE_BYTES: usize = 18;
 /// The number of bytes of entropy in a new temporary password.
 pub const TEMPORARY_PASSWORD_BYTES: usize = 9;
 
-/// Checks a password against a stored password hash, returning `Ok` if the
-/// password is correct and `Err` otherwise. This function is used for
-/// passwords when logging in, and for challenge codes when registering a
-/// new account.
-///
-/// Also returns an error if the stored hash is missing or invalid.
-pub(crate) fn verify_password(stored_hash: &PasswordHash, given_password: &Secret) -> Result<(), Error> {
+/// Checks a password against a stored password hash, returning `true` if the
+/// password is correct, and `false` if it is incorrect or if the stored hash
+/// is missing (meaning no password is associated with the user account).
+/// 
+/// This function is used for passwords when logging in, and for challenge
+/// codes when registering a new account.
+/// 
+/// Returns an error if the stored hash is invalid.
+pub(crate) fn check_password(stored_hash: &PasswordHash, given_password: &Secret) -> Result<bool, Error> {
     let Some(stored_hash) = &stored_hash.0 else {
-        return Err(Error::UserHasNoPassword);
+        return Ok(false);
     };
     
     let hash = password_hash::PasswordHash::new(&stored_hash.0)
         .map_err(Error::Hasher)?;
 
     let algs: &[&dyn PasswordVerifier] = &[&Argon2::default()];
-    hash.verify_password(algs, &given_password.0)
-        .map_err(|e| match e {
-            password_hash::Error::Password => Error::IncorrectPassword,
-            e => Error::Hasher(e),
-        })
+    let result = hash.verify_password(algs, &given_password.0);
+    match result {
+        Ok(()) => Ok(true),
+        Err(password_hash::Error::Password) => Ok(false),
+        Err(e) => Err(Error::Hasher(e)),
+    }
 }
 
 /// Computes a password hash for the given password, which can be stored in the
@@ -152,7 +155,7 @@ fn base64_encode(bytes: &[u8]) -> String {
 mod test {
     use super::{
         check_fast_hash, fast_hash, generate_password_hash, generate_token_and_fast_hash,
-        verify_password, Error, Secret,
+        check_password, Secret,
     };
 
     #[test]
@@ -161,11 +164,8 @@ mod test {
         let wrong_password = Secret("something else".to_string());
         let hash = generate_password_hash(&password).unwrap();
 
-        verify_password(&hash, &password).expect("Correct password should verify");
-        match verify_password(&hash, &wrong_password) {
-            Err(Error::IncorrectPassword) => {}
-            result => panic!("Should be IncorrectPassword, was {result:?}"),
-        }
+        assert!(check_password(&hash, &password).expect("Correct password should verify"));
+        assert!(!check_password(&hash, &wrong_password).expect("Incorrect password should at least compare"));
     }
 
     #[test]

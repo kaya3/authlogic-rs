@@ -1,15 +1,13 @@
 use std::time::Duration;
 
 use actix_web::{
-    dev::ServiceRequest,
-    HttpRequest,
+    dev::ServiceRequest, HttpRequest
 };
 
 use crate::{
     app::{App, AppTypes},
-    errors::Error,
     hashing,
-    maybe_auth::{Auth, MaybeAuth, maybe_auth_from_request},
+    maybe_auth::{maybe_auth_from_request, Auth, MaybeAuth},
     secret::Secret,
     token_actions::AuthTokenAction,
     tokens,
@@ -31,25 +29,50 @@ pub struct SessionData<A: AppTypes> {
     pub expires: A::DateTime,
 }
 
+pub enum LoginOutcome<A: App> {
+    /// Indicates that the user logged in successfully.
+    Success(Auth<A>),
+    
+    /// Indicates that the user did not provide a correct password.
+    IncorrectPassword,
+    
+    /// Indicates that the user did not provide a correct identifier (e.g.
+    /// username or email address) when attempting to log in. Usually this
+    /// should be handled the same way as `IncorrectPassword`, to avoid leaking
+    /// information about which accounts exist. However, some apps may wish to
+    /// give more specific feedback to improve the user experience.
+    NoSuchUser,
+    
+    /// Indicates that the user account has no password associated with it.
+    UserHasNoPassword,
+}
+
 pub async fn login<A: App>(
     app: &mut A,
     user_identifier: &str,
     password: Secret,
     request: &HttpRequest,
-) -> Result<A::User, A::Error> {
+) -> Result<LoginOutcome<A>, A::Error> {
     let Some(user_data) = app
         .get_user_data_by_identifier(user_identifier)
         .await
         .map_err(Into::into)?
     else {
-        return Error::NoSuchUser.as_app_err();
+        return Ok(LoginOutcome::NoSuchUser);
     };
 
+    if !user_data.password_hash.exists() {
+        return Ok(LoginOutcome::UserHasNoPassword);
+    }
+    
     // Check password first, to avoid leaking information about user status.
     // This also returns `Error::UserHasNoPassword` if the hash is missing.
-    hashing::verify_password(&user_data.password_hash, &password)?;
-
-    let session_token = begin_session_for_user(app, &user_data.user)
+    let result = hashing::check_password(&user_data.password_hash, &password)?;
+    if !result {
+        return Ok(LoginOutcome::IncorrectPassword);
+    }
+    
+    let (session_id, session_token) = begin_session_for_user(app, &user_data.user)
         .await?;
     AuthTokenAction::Issue(session_token)
         .insert_into_request(request);
@@ -63,7 +86,12 @@ pub async fn login<A: App>(
     // messages about the status of their account.
     user_data.state.require_ready(user_id)?;
     
-    Ok(user_data.user)
+    Ok(LoginOutcome::Success(Auth {
+        user: user_data.user,
+        user_state: user_data.state,
+        session_id,
+        _deny_public_constructor: (),
+    }))
 }
 
 impl<A: App> MaybeAuth<A> {
@@ -114,6 +142,7 @@ pub(crate) async fn on_successful_challenge<A: App>(
         _ => {
             begin_session_for_user(app, user)
                 .await?
+                .1
         },
     };
 
@@ -165,7 +194,7 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
         log::debug!("No such session #{}", session_id);
         return revoke_cookie();
     };
-
+    
     if session.expires <= app.time_now() {
         // The session exists in the database, but is expired - delete it.
         log::debug!("Session #{} has expired; revoking", session_id);
@@ -187,10 +216,6 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
         return revoke_cookie();
     }
 
-    // Check if the user is inactive, needs to verify their email, or needs to
-    // change their password.
-    session.user_state.require_ready(session.user.id())?;
-
     // Renew the session if it is old enough.
     if should_renew(app, session.expires) {
         let token = renew_by_id(app, session_id)
@@ -201,6 +226,7 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
 
     Ok(MaybeAuth::Authenticated(Auth {
         user: session.user,
+        user_state: session.user_state,
         session_id,
         _deny_public_constructor: (),
     }))
@@ -209,9 +235,9 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
 /// Generates a new session token for the given user, and inserts the session
 /// into the database.
 ///
-/// Returns the new session token. An `AuthTokenAction` must be inserted into
-/// the request in order to issue the new session token cookie.
-async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<Secret, A::Error> {
+/// Returns the new session id and token. An `AuthTokenAction` must be inserted
+/// into the request in order to issue the new session token cookie.
+async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<(A::ID, Secret), A::Error> {
     let (session_token, hash) = hashing::generate_session_token_and_hash();
     let session_id = app.insert_session(user, hash, expiry_time(app))
         .await
@@ -219,7 +245,7 @@ async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<S
 
     log::debug!("Beginning session #{} for user #{}", session_id, user.id());
 
-    Ok(tokens::pack(session_id, session_token))
+    Ok((session_id, tokens::pack(session_id, session_token)))
 }
 
 /// Renews the session with the given id, updates the session in the database,

@@ -98,6 +98,13 @@ pub trait AppDb: AppTypes {
         user_id: Self::ID,
     ) -> Result<Option<UserData<Self>>, Self::DbError>;
 
+    /// Indicates whether a given user identifier (e.g. username or email)
+    /// belongs to an existing user.
+    async fn user_identifier_exists(
+        &mut self,
+        user_identifier: &str,
+    ) -> Result<bool, Self::DbError>;
+    
     /// Gets a user's data, including their password hash and active state, by
     /// their identifier (e.g. username or email).
     ///

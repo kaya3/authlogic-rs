@@ -13,37 +13,14 @@ pub enum Error {
     /// already have been completed, or expired, or it never existed.
     IncorrectChallengeCode,
 
-    /// Indicates that the user did not provide a correct password when
-    /// attempting to authenticate.
-    IncorrectPassword,
-
-    /// Indicates that the user did not provide a correct identifier (e.g.
-    /// username or email address) when attempting to log in. Usually this
-    /// should be handled the same way as `IncorrectPassword`, to avoid leaking
-    /// information about which accounts exist. However, some apps may wish to
-    /// give more specific feedback to improve the user experience.
-    NoSuchUser,
-
     /// Indicates that the user is not authenticated in a context where they
     /// need to be.
     NotAuthenticated,
-
-    /// Indicates that the user chose a password which is shorter than
-    /// `AppConfig::minimum_password_length()`.
-    PasswordTooShort,
-
-    /// Indicates that, when changing their password, the user chose a new
-    /// password which is the same as the old one.
-    PasswordsNotDifferent,
 
     /// Indicates that the user is authenticated but cannot continue until they
     /// choose a new password. This can happen if a new user is created with a
     /// temporary password, or the user completed a password reset challenge.
     RequirePasswordChange,
-
-    /// Indicates that the user attempted to log in using a password, but the
-    /// user account has no password associated with it.
-    UserHasNoPassword,
 
     /// Indicates that the user is authenticated but cannot continue, because
     /// their account has been suspended.
@@ -71,13 +48,7 @@ pub enum Error {
 impl Error {
     pub fn status_code(&self) -> StatusCode {
         match self {
-            Self::UserHasNoPassword
-            | Self::PasswordTooShort
-            | Self::PasswordsNotDifferent => StatusCode::BAD_REQUEST,
-
-            Self::NoSuchUser
-            | Self::UserIsSuspended
-            | Self::IncorrectPassword
+            Self::UserIsSuspended
             | Self::IncorrectChallengeCode
             | Self::EmailNotVerified
             | Self::RequirePasswordChange

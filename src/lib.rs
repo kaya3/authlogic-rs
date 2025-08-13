@@ -31,10 +31,13 @@ pub use secret::{
     Secret,
 };
 pub use sessions::{
+    LoginOutcome,
     SessionData,
     login,
 };
 pub use users::{
+    PasswordChangeOutcome,
+    RegistrationOutcome,
     UserData,
     UserID,
     UserState,

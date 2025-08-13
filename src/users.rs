@@ -16,18 +16,9 @@ pub trait UserID<T> {
     /// Sets the user's id field. This is only called after inserting a new
     /// unverified user, since that is when the user receives their unique id.
     fn set_id(&mut self, new_id: T);
-}
-
-#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
-pub struct UserData<A: AppTypes> {
-    #[cfg_attr(feature = "diesel", diesel(embed))]
-    pub user: A::User,
     
-    #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = diesel::sql_types::Text))]
-    pub password_hash: PasswordHash,
-    
-    #[cfg_attr(feature = "diesel", diesel(embed))]
-    pub state: UserState,
+    /// Gets the user's identifier (e.g. username or email).
+    fn identifier(&self) -> &str;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -42,31 +33,78 @@ pub struct UserState {
     pub require_password_change: bool,
 }
 
+impl UserState {
+    /// A user is "ready" if they are not suspended, and are not required to
+    /// perform some action (email verification or password change) before
+    /// continuing.
+    pub fn is_ready(self) -> bool {
+        !self.is_suspended && !self.require_email_verification && !self.require_password_change
+    }
+    
+    /// Requires that the user is "ready", or otherwise logs a message and
+    /// returns an error.
+    pub(crate) fn require_ready<ID: Display>(&self, id: ID) -> Result<(), Error> {
+        if self.is_suspended {
+            log::info!("User #{id} is suspended");
+            Err(Error::UserIsSuspended)
+        } else if self.require_email_verification {
+            log::info!("User #{id} requires email verification");
+            Err(Error::EmailNotVerified)
+        } else if self.require_password_change {
+            log::info!("User #{id} requires password change");
+            Err(Error::RequirePasswordChange)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl Display for UserState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut any = false;
+        
+        if self.is_suspended {
+            f.write_str("suspended")?;
+            any = true;
+        }
+        
+        if self.require_email_verification {
+            if any { f.write_str(", ")?; }
+            f.write_str("unverified")?;
+            any = true;
+        }
+        
+        if self.require_password_change {
+            if any { f.write_str(", ")?; }
+            f.write_str("must change password")?;
+            any = true;
+        }
+        
+        if !any {
+            f.write_str("ready")?;
+        }
+        
+        Ok(())
+    }
+}
+
+#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
+pub struct UserData<A: AppTypes> {
+    #[cfg_attr(feature = "diesel", diesel(embed))]
+    pub user: A::User,
+    
+    #[cfg_attr(feature = "diesel", diesel(deserialize_as = Option<String>), diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>))]
+    pub password_hash: PasswordHash,
+    
+    #[cfg_attr(feature = "diesel", diesel(embed))]
+    pub state: UserState,
+}
+
 impl <A: App> UserData<A> {
     /// Indicates whether there is a password associated with this user
     /// account.
     pub fn has_password(&self) -> bool {
         self.password_hash.exists()
-    }
-}
-
-impl UserState {
-    /// A user is "ready" if they are not suspended, and are not required to
-    /// perform some action (email verification or password change) before
-    /// continuing.
-    pub(crate) fn require_ready<ID: Display>(self, user_id: ID) -> Result<(), Error> {
-        if self.is_suspended {
-            log::info!("User #{user_id} is suspended");
-            Err(Error::UserIsSuspended)
-        } else if self.require_email_verification {
-            log::info!("User #{user_id} requires email verification");
-            Err(Error::EmailNotVerified)
-        } else if self.require_password_change {
-            log::info!("User #{user_id} requires password change");
-            Err(Error::RequirePasswordChange)
-        } else {
-            Ok(())
-        }
     }
 }
 
@@ -79,11 +117,11 @@ pub async fn register_new_user<A: App>(
     app: &mut A,
     user: A::User,
     password: Secret,
-) -> Result<A::User, A::Error> {
-    check_password_strength(app, &password)?;
+) -> Result<RegistrationOutcome<A>, A::Error> {
+    let len = password.expose().len();
     let hash = hashing::generate_password_hash(&password)?;
     
-    register(app, user, None, hash)
+    register(app, user, Some(len), None, hash)
         .await
 }
 
@@ -95,8 +133,8 @@ pub async fn register_new_user<A: App>(
 pub async fn register_new_user_without_password<A: App>(
     app: &mut A,
     user: A::User,
-) -> Result<A::User, A::Error> {
-    register(app, user, None, PasswordHash::NONE)
+) -> Result<RegistrationOutcome<A>, A::Error> {
+    register(app, user, None, None, PasswordHash::NONE)
         .await
 }
 
@@ -109,11 +147,27 @@ pub async fn register_new_user_without_password<A: App>(
 pub async fn register_new_user_with_temporary_password<A: App>(
     app: &mut A,
     user: A::User,
-) -> Result<A::User, A::Error> {
+) -> Result<RegistrationOutcome<A>, A::Error> {
     let (password, hash) = hashing::generate_password_and_hash()?;
     
-    register(app, user, Some(password), hash)
+    register(app, user, None, Some(password), hash)
         .await
+}
+
+pub enum PasswordChangeOutcome {
+    /// Indicates that the password was changed successfully.
+    Success,
+    
+    /// Indicates that the user did not provide a correct current password.
+    IncorrectPassword,
+    
+    /// Indicates that the user chose a password which is shorter than
+    /// `AppConfig::minimum_password_length()`.
+    NewPasswordTooShort,
+    
+    /// Indicates that the user chose a new password which is the same as the
+    /// old one.
+    PasswordsNotDifferent,
 }
 
 pub async fn change_password<A: App>(
@@ -121,16 +175,19 @@ pub async fn change_password<A: App>(
     auth: Auth<A>,
     old_password: Option<Secret>,
     new_password: Secret,
-) -> Result<(), A::Error> {
+) -> Result<PasswordChangeOutcome, A::Error> {
     let user = auth.user;
 
     // Make sure they actually changed their password. This doesn't need to be
     // done in constant-time, because both are provided by the user.
     if matches!(&old_password, Some(old) if old.0 == new_password.0) {
-        return Error::PasswordsNotDifferent.as_app_err();
+        return Ok(PasswordChangeOutcome::PasswordsNotDifferent);
     }
 
-    check_password_strength(app, &new_password)?;
+    // Make sure the new password is strong enough.
+    if new_password.0.len() < app.minimum_password_length() {
+        return Ok(PasswordChangeOutcome::NewPasswordTooShort);
+    }
 
     // Verify the old password.
     let data = app
@@ -143,10 +200,13 @@ pub async fn change_password<A: App>(
     if data.password_hash.exists() {
         if let Some(old_password) = old_password {
             // Account is password-protected, and old password is provided
-            hashing::verify_password(&data.password_hash, &old_password)?;
+            let result = hashing::check_password(&data.password_hash, &old_password)?;
+            if !result {
+                return Ok(PasswordChangeOutcome::IncorrectPassword);
+            }
         } else {
             // Account is password-protected, but no old password is provided
-            return Error::IncorrectPassword.as_app_err();
+            return Ok(PasswordChangeOutcome::IncorrectPassword);
         }
     }
 
@@ -162,7 +222,7 @@ pub async fn change_password<A: App>(
         .await
         .map_err(Into::into)?;
 
-    Ok(())
+    Ok(PasswordChangeOutcome::Success)
 }
 
 pub async fn request_password_reset<A: App>(app: &mut A, user: &A::User) -> Result<(), A::Error> {
@@ -170,19 +230,37 @@ pub async fn request_password_reset<A: App>(app: &mut A, user: &A::User) -> Resu
         .await
 }
 
-fn check_password_strength<A: App>(app: &mut A, password: &Secret) -> Result<(), Error> {
-    if password.0.len() < app.minimum_password_length() {
-        return Err(Error::PasswordTooShort);
-    }
-    Ok(())
+pub enum RegistrationOutcome<A: App> {
+    /// Indicates that the user was registered successfully.
+    Success(A::User),
+    
+    /// Indicates that the user's identifier (e.g. username or email) already
+    /// belongs to an existing user.
+    IdentifierAlreadyExists,
+    
+    /// Indicates that the user chose a password which is shorter than
+    /// `AppConfig::minimum_password_length()`.
+    PasswordTooShort,
 }
 
 async fn register<A: App>(
     app: &mut A,
     mut user: A::User,
+    chosen_password_length: Option<usize>,
     temporary_password: Option<Secret>,
     password_hash: PasswordHash,
-) -> Result<A::User, A::Error> {
+) -> Result<RegistrationOutcome<A>, A::Error> {
+    let result = app.user_identifier_exists(user.identifier())
+        .await
+        .map_err(Into::into)?;
+    if result {
+        return Ok(RegistrationOutcome::IdentifierAlreadyExists);
+    }
+    
+    if matches!(chosen_password_length, Some(n) if n < app.minimum_password_length()) {
+        return Ok(RegistrationOutcome::PasswordTooShort);
+    }
+    
     // Insert the user into the database. This has to be done first to get the
     // user's new unique id, which might be needed by the app mailer.
     let user_data = UserData {
@@ -226,5 +304,5 @@ async fn register<A: App>(
         return Err(e);
     }
 
-    Ok(user)
+    Ok(RegistrationOutcome::Success(user))
 }
