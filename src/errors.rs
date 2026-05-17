@@ -38,11 +38,14 @@ pub enum Error {
     /// Internal error which occurs when serializing or deserializing challenge
     /// data.
     Serde(serde_json::Error),
-
-    /// Internal error which occurs when hashing or verifying a password. This
-    /// could indicate, for example, that a hash stored in the database is in
-    /// the wrong format, or uses an unsupported algorithm.
-    Hasher(password_hash::Error),
+    
+    /// Internal error which occurs when hashing a new password.
+    NewPasswordHash(password_hash::Error),
+    
+    /// Internal error which occurs when verifying a password. This could
+    /// indicate, for example, that a hash stored in the database is in the
+    /// wrong format, or uses an unsupported algorithm.
+    StoredPasswordHash(password_hash::phc::Error),
 }
 
 impl Error {
@@ -55,7 +58,8 @@ impl Error {
             | Self::NotAuthenticated => StatusCode::UNAUTHORIZED,
 
             Self::UserDataQueryFailed {..}
-            | Self::Hasher(_)
+            | Self::NewPasswordHash(_)
+            | Self::StoredPasswordHash(_)
             | Self::Serde(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

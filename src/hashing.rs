@@ -1,9 +1,4 @@
-use argon2::Argon2;
-use password_hash::{
-    PasswordHasher,
-    PasswordVerifier,
-    SaltString,
-};
+use password_hash::{PasswordVerifier, phc};
 
 use crate::{
     errors::Error,
@@ -39,16 +34,28 @@ pub(crate) fn check_password(stored_hash: &PasswordHash, given_password: &Secret
         return Ok(false);
     };
     
-    let hash = password_hash::PasswordHash::new(&stored_hash.0)
-        .map_err(Error::Hasher)?;
+    let hash = phc::PasswordHash::new(&stored_hash.0)
+        .map_err(Error::StoredPasswordHash)?;
 
-    let algs: &[&dyn PasswordVerifier] = &[&Argon2::default()];
-    let result = hash.verify_password(algs, &given_password.0);
-    match result {
-        Ok(()) => Ok(true),
-        Err(password_hash::Error::Password) => Ok(false),
-        Err(e) => Err(Error::Hasher(e)),
+    let algs: &[&dyn PasswordVerifier<phc::PasswordHash>] = &[
+        &argon2::Argon2::default(),
+        #[cfg(feature = "pbkdf2")] &pbkdf2::Pbkdf2::default(),
+        #[cfg(feature = "scrypt")] &scrypt::Scrypt::default(),
+    ];
+
+    let given_password_bytes = given_password.0.as_bytes();
+    for alg in algs {
+        use password_hash::Error as E;
+
+        let result = alg.verify_password(given_password_bytes, &hash);
+        match result {
+            Ok(()) => return Ok(true),
+            Err(E::PasswordInvalid) => return Ok(false),
+            Err(_) => continue,
+        }
     }
+
+    Ok(false)
 }
 
 /// Computes a password hash for the given password, which can be stored in the
@@ -57,11 +64,12 @@ pub(crate) fn check_password(stored_hash: &PasswordHash, given_password: &Secret
 /// This function cannot be used to compare a password against a stored hash;
 /// instead, use the `check_password` function.
 pub(crate) fn generate_password_hash(new_password: &Secret) -> Result<PasswordHash, Error> {
-    let salt = SaltString::generate(rand::thread_rng());
+    use argon2::{Argon2, PasswordHasher};
 
+    let salt = phc::Salt::from_rng(&mut rand::rng());
     let hash = Argon2::default()
-        .hash_password(new_password.0.as_bytes(), &salt)
-        .map_err(Error::Hasher)?;
+        .hash_password_with_salt(new_password.expose().as_bytes(), &salt)
+        .map_err(Error::NewPasswordHash)?;
     
     Ok(PasswordHash(Some(Secret(hash.to_string()))))
 }
@@ -138,11 +146,14 @@ fn fast_hash(s: &Secret) -> Secret {
 /// Generates a random token with `N` bytes of entropy, base64-encoded. The
 /// encoded token is URL-safe.
 fn generate_base64_token<const N: usize>() -> Secret {
-    use rand::{thread_rng, Rng};
-
     let mut bytes = [0u8; N];
-    thread_rng().fill(&mut bytes as &mut [u8]);
-    Secret(base64_encode(&bytes))
+    _generate_base64_token(&mut bytes)
+}
+
+fn _generate_base64_token(buffer: &mut [u8]) -> Secret {
+    use rand::{rng, RngExt};
+    rng().fill(buffer);
+    Secret(base64_encode(buffer))
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
