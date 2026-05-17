@@ -7,7 +7,7 @@ use crate::{
     secret::{PasswordHash, Secret},
     sessions,
     tokens,
-    users::UserID,
+    users::{UserID, UserState},
 };
 
 /// A type of notification which can be sent to a user by email.
@@ -54,8 +54,11 @@ impl NoCustomChallenges {
 pub struct ChallengeData<A: AppTypes> {
     #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user: A::User,
+
+    #[cfg_attr(feature = "diesel", diesel(embed))]
+    pub user_state: UserState,
     
-    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Text))]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = Text))]
     pub challenge: String,
     
     #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = diesel::sql_types::Text))]
@@ -63,6 +66,12 @@ pub struct ChallengeData<A: AppTypes> {
     
     #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Timestamp))]
     pub expires: A::DateTime,
+}
+
+pub struct ChallengeOutcome<A: AppTypes> {
+    pub user: A::User,
+    pub user_state: UserState,
+    pub challenge: Challenge<A>,
 }
 
 pub async fn issue_login_challenge<A: App>(
@@ -119,7 +128,7 @@ pub async fn complete_challenge<A: App>(
     app: &mut A,
     code: Secret,
     request: &HttpRequest,
-) -> Result<(A::User, Challenge<A>), A::Error> {
+) -> Result<ChallengeOutcome<A>, A::Error> {
     let (challenge_id, challenge_code) = tokens::unpack(code)
         .ok_or(Error::IncorrectChallengeCode)?;
 
@@ -147,6 +156,7 @@ pub async fn complete_challenge<A: App>(
     }
 
     let user = data.user;
+    let mut user_state = data.user_state;
 
     match challenge {
         Challenge::ResetPassword => {
@@ -157,12 +167,14 @@ pub async fn complete_challenge<A: App>(
             app.update_password(&user, PasswordHash::NONE, true)
                 .await
                 .map_err(Into::into)?;
+
+            user_state.has_password = false;
+            user_state.require_password_change = true;
         },
-        Challenge::VerifyNewUser {..} => {
+        Challenge::VerifyNewUser => {
+            // All successful challenges result in the user's email address
+            // being verified, if it is not already.
             log::info!("Successful email verification challenge");
-            app.verify_user(&user)
-                .await
-                .map_err(Into::into)?;
         },
         Challenge::LogIn => {
             // All successful challenges result in an authenticated session;
@@ -173,6 +185,15 @@ pub async fn complete_challenge<A: App>(
             log::info!("Successful custom challenge");
         },
     };
+
+    if data.user_state.require_email_verification {
+        app.verify_user(&user)
+            .await
+            .map_err(Into::into)?;
+
+        log::info!("Email verified for user {}", user.id());
+        user_state.require_email_verification = false;
+    }
 
     // Do this after verifying, so that the user is verified before we start a
     // session for them.
@@ -185,7 +206,7 @@ pub async fn complete_challenge<A: App>(
         .await
         .map_err(Into::into)?;
 
-    Ok((user, challenge))
+    Ok(ChallengeOutcome {user, user_state, challenge})
 }
 
 fn parse_json<A: App>(value: impl AsRef<str>) -> Result<Challenge<A>, Error> {
