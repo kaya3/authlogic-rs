@@ -62,7 +62,7 @@ pub async fn middleware<A: App>(
 
             // Issue a cookie with the appropriate attributes
             // https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies
-            let mut cookie = Cookie::new(cookie_name, &token.0);
+            let mut cookie = Cookie::new(cookie_name, token.expose());
 
             // HTTP-only cookies are not visible to client-side JavaScript.
             cookie.set_http_only(true);

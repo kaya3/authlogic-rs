@@ -30,11 +30,11 @@ pub const TEMPORARY_PASSWORD_BYTES: usize = 9;
 /// 
 /// Returns an error if the stored hash is invalid.
 pub(crate) fn check_password(stored_hash: &PasswordHash, given_password: &Secret) -> Result<bool, Error> {
-    let Some(stored_hash) = &stored_hash.0 else {
+    let Some(stored_hash) = stored_hash.expose() else {
         return Ok(false);
     };
     
-    let hash = phc::PasswordHash::new(&stored_hash.0)
+    let hash = phc::PasswordHash::new(stored_hash)
         .map_err(Error::StoredPasswordHash)?;
 
     let algs: &[&dyn PasswordVerifier<phc::PasswordHash>] = &[
@@ -43,7 +43,7 @@ pub(crate) fn check_password(stored_hash: &PasswordHash, given_password: &Secret
         #[cfg(feature = "scrypt")] &scrypt::Scrypt::default(),
     ];
 
-    let given_password_bytes = given_password.0.as_bytes();
+    let given_password_bytes = given_password.expose().as_bytes();
     for alg in algs {
         use password_hash::Error as E;
 
