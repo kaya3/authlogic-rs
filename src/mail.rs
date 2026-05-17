@@ -45,6 +45,7 @@ pub enum NoCustomChallenges {}
 
 impl NoCustomChallenges {
     /// Asserts that a custom challenge never occurs in this application.
+    #[inline(always)]
     pub fn never_happens(self) -> ! {
         match self {}
     }
