@@ -26,6 +26,9 @@ pub trait UserID<T> {
 #[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
 pub struct UserState {
     #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
+    pub has_password: bool,
+
+    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
     pub is_suspended: bool,
     #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
     pub require_email_verification: bool,
@@ -265,12 +268,13 @@ async fn register<A: App>(
     // user's new unique id, which might be needed by the app mailer.
     let user_data = UserData {
         user: user.clone(),
-        password_hash,
         state: UserState {
+            has_password: password_hash.exists(),
             is_suspended: false,
             require_password_change: temporary_password.is_some(),
             require_email_verification: temporary_password.is_none(),
         },
+        password_hash,
     };
     let user_id = app.insert_user(user_data)
         .await
