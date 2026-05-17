@@ -81,7 +81,7 @@ pub async fn login<A: App>(
         .insert_into_request(request);
 
     let user_id = user_data.user.id();
-    log::debug!("Successful password login for user #{user_id}");
+    log::debug!("Successful password login for user {user_id}");
     
     let auth = Auth {
         user: user_data.user,
@@ -110,7 +110,7 @@ impl<A: App> MaybeAuth<A> {
 
 impl<A: App> Auth<A> {
     pub async fn logout(self, app: &mut A, request: &HttpRequest) -> Result<(), A::Error> {
-        log::debug!("Logging out user #{}", self.user.id());
+        log::debug!("Logging out user {}", self.user.id());
 
         app.delete_session_by_id(self.session_id)
             .await
@@ -185,7 +185,7 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
         return revoke_cookie();
     };
 
-    log::debug!("Request has cookie claiming session #{}", session_id);
+    log::debug!("Request has cookie claiming session {}", session_id);
 
     let Some(session) = app.get_session_by_id(session_id)
         .await
@@ -194,13 +194,13 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
         // The unpacked cookie refers to a session ID which doesn't exist in
         // the database. Could be an old cookie from an expired session, or an
         // attacker.
-        log::debug!("No such session #{}", session_id);
+        log::debug!("No such session {}", session_id);
         return revoke_cookie();
     };
     
     if session.expires <= app.time_now() {
         // The session exists in the database, but is expired - delete it.
-        log::debug!("Session #{} has expired; revoking", session_id);
+        log::debug!("Session {} has expired; revoking", session_id);
         app.delete_session_by_id(session_id)
             .await
             .map_err(Into::into)?;
@@ -212,7 +212,7 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
         // The unpacked token in the user's cookie doesn't match the session ID
         // it claims to belong to. Could be an old token for a session which
         // was since renewed, or an attacker.
-        log::info!("Invalid session token for session #{}", session_id);
+        log::info!("Invalid session token for session {}", session_id);
 
         // Revoke cookie, but don't delete session from database; an attacker
         // could give incorrect tokens for guessed session IDs.
@@ -246,7 +246,7 @@ async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<(
         .await
         .map_err(Into::into)?;
 
-    log::debug!("Beginning session #{} for user #{}", session_id, user.id());
+    log::debug!("Beginning session {} for user {}", session_id, user.id());
 
     Ok((session_id, tokens::pack(session_id, session_token)))
 }
@@ -254,7 +254,7 @@ async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<(
 /// Renews the session with the given id, updates the session in the database,
 /// and returns the new session token.
 async fn renew_by_id<A: App>(app: &mut A, session_id: A::ID) -> Result<Secret, A::Error> {
-    log::debug!("Renewing session #{}", session_id);
+    log::debug!("Renewing session {}", session_id);
 
     let (session_token, hash) = hashing::generate_session_token_and_hash();
     app.update_session_by_id(session_id, hash, expiry_time(app))

@@ -130,7 +130,7 @@ pub async fn complete_challenge<A: App>(
         .ok_or(Error::IncorrectChallengeCode)?;
 
     if app.time_now() >= data.expires {
-        log::debug!("Challenge #{} has expired; deleting", challenge_id);
+        log::debug!("Challenge {challenge_id} has expired; deleting");
         app.delete_challenge_by_id(challenge_id)
             .await
             .map_err(Into::into)?;
@@ -142,7 +142,7 @@ pub async fn complete_challenge<A: App>(
 
     // Check that the submitted code is correct.
     if !hashing::check_fast_hash(&challenge_code, &data.code_hash) {
-        log::info!("Invalid code for challenge #{}", challenge_id);
+        log::info!("Invalid code for challenge {challenge_id}",);
         return Error::IncorrectChallengeCode.as_app_err();
     }
 
@@ -167,7 +167,7 @@ pub async fn complete_challenge<A: App>(
         Challenge::LogIn => {
             // All successful challenges result in an authenticated session;
             // don't need to do anything here.
-            log::info!("Successful email login challenge for user #{}", user.id());
+            log::info!("Successful email login challenge for user {}", user.id());
         },
         Challenge::Custom {..} => {
             log::info!("Successful custom challenge");

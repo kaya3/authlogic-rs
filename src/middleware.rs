@@ -30,7 +30,7 @@ pub async fn middleware<A: App>(
 
     match &auth {
         MaybeAuth::Authenticated(auth) => {
-            log::debug!("Authenticated as user #{}, session #{} ({})", auth.user.id(), auth.session_id, auth.user_state);
+            log::debug!("Authenticated as user {}, session {} ({})", auth.user.id(), auth.session_id, auth.user_state);
         }
         MaybeAuth::Unauthenticated => {
             log::debug!("Not authenticated");

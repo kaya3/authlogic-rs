@@ -45,13 +45,13 @@ impl UserState {
     /// returns an error.
     pub(crate) fn require_ready<ID: Display>(&self, id: ID) -> Result<(), Error> {
         if self.is_suspended {
-            log::info!("User #{id} is suspended");
+            log::debug!("User {id} is suspended");
             Err(Error::UserIsSuspended)
         } else if self.require_email_verification {
-            log::info!("User #{id} requires email verification");
+            log::debug!("User {id} requires email verification");
             Err(Error::EmailNotVerified)
         } else if self.require_password_change {
-            log::info!("User #{id} requires password change");
+            log::debug!("User {id} requires password change");
             Err(Error::RequirePasswordChange)
         } else {
             Ok(())
