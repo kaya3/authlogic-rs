@@ -83,6 +83,35 @@ pub async fn issue_login_challenge<A: App>(
         .await
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum ReissueEmailVerificationOutcome {
+    Sent,
+    AlreadyVerified,
+    NoSuchUser,
+}
+
+pub async fn reissue_email_verification_challenge<A: App>(
+    app: &mut A,
+    user_identifier: &str,
+) -> Result<ReissueEmailVerificationOutcome, A::Error> {
+    let user = app.get_user_data_by_identifier(user_identifier)
+        .await
+        .map_err(Into::into)?;
+
+    let Some(user) = user else {
+        return Ok(ReissueEmailVerificationOutcome::NoSuchUser);
+    };
+
+    if !user.state.require_email_verification {
+        return Ok(ReissueEmailVerificationOutcome::AlreadyVerified);
+    }
+
+    issue_challenge(app, &user.user, Challenge::VerifyNewUser)
+        .await?;
+
+    Ok(ReissueEmailVerificationOutcome::Sent)
+}
+
 pub async fn issue_custom_challenge<A: App>(
     app: &mut A,
     user: &A::User,
