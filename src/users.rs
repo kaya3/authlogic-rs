@@ -1,3 +1,6 @@
+#[cfg(feature = "diesel")]
+use diesel::{prelude::*, sql_types::*};
+
 use std::fmt::Display;
 
 use crate::{
@@ -23,16 +26,18 @@ pub trait UserID<T> {
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "sqlx", derive(sqlx::FromRow, sqlx::Type))]
-#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
+#[cfg_attr(feature = "diesel", derive(QueryableByName))]
 pub struct UserState {
-    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = Bool))]
     pub has_password: bool,
 
-    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = Bool))]
     pub is_suspended: bool,
-    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
+
+    #[cfg_attr(feature = "diesel", diesel(sql_type = Bool))]
     pub require_email_verification: bool,
-    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Bool))]
+    
+    #[cfg_attr(feature = "diesel", diesel(sql_type = Bool))]
     pub require_password_change: bool,
 }
 
@@ -91,7 +96,7 @@ impl Display for UserState {
     }
 }
 
-#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
+#[cfg_attr(feature = "diesel", derive(QueryableByName))]
 pub struct UserData<A: AppTypes> {
     #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user: A::User,

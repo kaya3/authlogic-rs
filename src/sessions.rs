@@ -1,3 +1,6 @@
+#[cfg(feature = "diesel")]
+use diesel::{prelude::*, sql_types::*};
+
 use std::time::Duration;
 
 use actix_web::{
@@ -14,7 +17,7 @@ use crate::{
     users::{UserID, UserState},
 };
 
-#[cfg_attr(feature = "diesel", derive(diesel::prelude::QueryableByName))]
+#[cfg_attr(feature = "diesel", derive(QueryableByName))]
 pub struct SessionData<A: AppTypes> {
     #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user: A::User,
@@ -22,10 +25,10 @@ pub struct SessionData<A: AppTypes> {
     #[cfg_attr(feature = "diesel", diesel(embed))]
     pub user_state: UserState,
     
-    #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = diesel::sql_types::Text))]
+    #[cfg_attr(feature = "diesel", diesel(deserialize_as = String), diesel(sql_type = Text))]
     pub token_hash: Secret,
     
-    #[cfg_attr(feature = "diesel", diesel(sql_type = diesel::sql_types::Timestamp))]
+    #[cfg_attr(feature = "diesel", diesel(sql_type = Timestamp))]
     pub expires: A::DateTime,
 }
 
