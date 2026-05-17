@@ -126,7 +126,7 @@ pub(crate) async fn issue_challenge<A: App>(
     user: &A::User,
     challenge: Challenge<A>,
 ) -> Result<(), A::Error> {
-    let (code, code_hash) = hashing::generate_challenge_code_and_hash();
+    let (bare_code, code_hash) = hashing::generate_challenge_code_and_hash();
 
     let expires_secs = 3600 * app.challenge_expire_after_hours() as u64;
     let expires = app.time_now() + std::time::Duration::from_secs(expires_secs);
@@ -136,12 +136,13 @@ pub(crate) async fn issue_challenge<A: App>(
         .insert_challenge(user, &challenge_str, code_hash, expires)
         .await
         .map_err(Into::into)?;
-    let code = tokens::pack(challenge_id, code);
+    let code = tokens::pack(challenge_id, bare_code);
     
     // Send challenge email
-    if let Err(e) = app.send_challenge(user, challenge, code)
-        .await
-    {
+    let result = app.send_challenge(user, challenge, code)
+        .await;
+
+    if let Err(e) = result {
         // Failed to send the challenge link by email. The challenge code is now
         // unusable, since the link will not be received; delete it.
         app.delete_challenge_by_id(challenge_id)
