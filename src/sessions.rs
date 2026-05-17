@@ -30,9 +30,12 @@ pub struct SessionData<A: AppTypes> {
 }
 
 pub enum LoginOutcome<A: App> {
-    /// Indicates that the user logged in successfully.
+    /// Indicates that the user logged in successfully, and is "ready".
     Success(Auth<A>),
     
+    /// Indicates that the user logged in successfully, but is not "ready".
+    SuccessButNotReady(Auth<A>),
+
     /// Indicates that the user did not provide a correct password.
     IncorrectPassword,
     
@@ -80,18 +83,18 @@ pub async fn login<A: App>(
     let user_id = user_data.user.id();
     log::debug!("Successful password login for user #{user_id}");
     
-    // Check if the user is suspended, needs to verify their email, or needs to
-    // change their password. Do this after creating a session, so the user can
-    // use the session to change their password, and can be shown personalised
-    // messages about the status of their account.
-    user_data.state.require_ready(user_id)?;
-    
-    Ok(LoginOutcome::Success(Auth {
+    let auth = Auth {
         user: user_data.user,
         user_state: user_data.state,
         session_id,
         _deny_public_constructor: (),
-    }))
+    };
+
+    Ok(if user_data.state.is_ready() {
+        LoginOutcome::Success(auth)
+    } else {
+        LoginOutcome::SuccessButNotReady(auth)
+    })
 }
 
 impl<A: App> MaybeAuth<A> {
