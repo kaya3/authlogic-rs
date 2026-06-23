@@ -36,6 +36,12 @@ pub enum MaybeAuth<A: App> {
     Unauthenticated,
 }
 
+impl<A: App> Auth<A> {
+    pub fn into_maybe_auth(self) -> MaybeAuth<A> {
+        MaybeAuth::Authenticated(self)
+    }
+}
+
 impl<A: App> MaybeAuth<A> {
     /// Requires that the user is authenticated and "ready", otherwise returns
     /// an error.

@@ -10,6 +10,9 @@ mod token_actions;
 mod tokens;
 mod users;
 
+#[cfg(feature = "backdoors_for_testing")]
+pub mod test;
+
 pub use app::{
     App,
     AppConfig,

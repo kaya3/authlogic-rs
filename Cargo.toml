@@ -1,7 +1,7 @@
 [package]
 name = "authlogic"
 description = "Authentication logic for Actix Web applications"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 license = "MIT"
 keywords = ["actix", "auth", "session", "password"]
@@ -12,6 +12,7 @@ readme = "README.md"
 [dependencies]
 actix-web = "4.9.0"
 argon2 = "0.6.0-rc.8"
+awc = { version = "3.8.2", features = ["cookies"], optional = true }
 base64 = "0.22.1"
 constant_time_eq = "0.5.0"
 diesel = { version = "2.3.9", optional = true }
@@ -30,6 +31,7 @@ trait-variant = "0.1.2"
 zeroize = "1.8.2"
 
 [features]
+backdoors_for_testing = ["dep:awc"]
 diesel = ["dep:diesel", "dep:diesel-derive-newtype"]
 pbkdf2 = ["dep:pbkdf2"]
 scrypt = ["dep:scrypt"]
