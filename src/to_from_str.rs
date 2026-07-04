@@ -1,9 +1,10 @@
 /// Trait for conversion of IDs to and from strings. This is used to encode and
 /// decode session IDs in cookies, and challenge IDs in URLs.
 /// 
-/// Implementations are required to preserve round trips, and not 
+/// Implementations are required to preserve round trips, and not use the
+/// `EXCLUDED` character.
 pub trait ToFromStr: Sized {
-    /// A printable ASCII character which cannot appear in the string
+    /// A printable, URL-safe ASCII character which cannot appear in the string
     /// representation of an ID.
     const EXCLUDED: char;
     
