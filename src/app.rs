@@ -33,7 +33,6 @@ pub trait AppTypes: Sized {
 
 /// This trait defines functions which provide configuration parameters to the
 /// authentication library.
-#[allow(unused)]
 pub trait AppConfig {
     /// Returns the minimum password length.
     ///
