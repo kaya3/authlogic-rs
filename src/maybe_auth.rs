@@ -15,7 +15,6 @@ use crate::{
 };
 
 /// Represents an authenticated user.
-#[derive(Clone)]
 pub struct Auth<A: App> {
     pub user: A::User,
     pub user_state: UserState,
@@ -30,7 +29,6 @@ pub struct Auth<A: App> {
 /// authenticated. Equivalent to `Option<Auth>`, but Rust doesn't allow
 /// implementing third-party traits like `actix_web::FromRequest` for built-in
 /// types like `Option`.
-#[derive(Clone)]
 pub enum MaybeAuth<A: App> {
     Authenticated(Auth<A>),
     Unauthenticated,
@@ -128,6 +126,28 @@ pub fn require_auth_from_request<A: App>(request: &impl HttpMessage) -> Result<A
 pub fn require_user_from_request<A: App>(request: &impl HttpMessage) -> Result<A::User, A::Error> {
     require_auth_from_request::<A>(request)
         .map(|auth| auth.user)
+}
+
+// Manual impl, as `derive(Clone)` needlessly constrains `A: Clone`.
+impl <A: App> Clone for Auth<A> {
+    fn clone(&self) -> Self {
+        Self {
+            user: self.user.clone(),
+            user_state: self.user_state,
+            session_id: self.session_id,
+            _deny_public_constructor: (),
+        }
+    }
+}
+
+// Manual impl, as `derive(Clone)` needlessly constrains `A: Clone`.
+impl <A: App> Clone for MaybeAuth<A> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Authenticated(auth) => Self::Authenticated(auth.clone()),
+            Self::Unauthenticated => Self::Unauthenticated,
+        }
+    }
 }
 
 impl<A: App> From<MaybeAuth<A>> for Option<Auth<A>> {
