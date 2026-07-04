@@ -95,15 +95,3 @@ impl<'de> serde::Deserialize<'de> for PasswordHash {
             .map(Self)
     }
 }
-
-// impl serde::Serialize for Secret {
-//     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-//         String::serialize(&self.0, serializer)
-//     }
-// }
-
-// impl serde::Serialize for PasswordHash {
-//     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-//         Option::<Secret>::serialize(&self.0, serializer)
-//     }
-// }
