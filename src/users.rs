@@ -202,7 +202,7 @@ pub async fn change_password<A: App>(
         .get_user_data_by_id(user.id())
         .await
         .map_err(Into::into)?
-        .ok_or(Error::UserDataQueryFailed {user_id: user.id().into()})?;
+        .ok_or(Error::UserDataQueryFailed {user_id: user.id().to_string()})?;
     
     // If the account is password-protected, verify the old password
     if data.password_hash.exists() {

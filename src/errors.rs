@@ -39,7 +39,7 @@ pub enum Error {
     /// a race condition in which the user is deleted after the session cookie
     /// is verified but before the reauthentication is checked.
     #[error("User data query failed for id = {user_id}")]
-    UserDataQueryFailed {user_id: i64},
+    UserDataQueryFailed {user_id: String},
 
     /// Internal error which occurs when serializing or deserializing challenge
     /// data.
