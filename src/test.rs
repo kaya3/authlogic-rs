@@ -13,7 +13,7 @@ use crate::{
 /// 
 /// This function must only be used during tests, as it inherently creates a
 /// backdoor which bypasses authentication.
-async fn create_test_session<A: App>(app: &mut A, user_id: A::ID) -> (Secret, Auth<A>)
+async fn create_test_session<A: App>(app: &mut A, user_id: A::UserID) -> (Secret, Auth<A>)
 where A::DbError: std::fmt::Debug {
     let user_data = _get_user_data(app, user_id)
         .await;
@@ -37,7 +37,7 @@ where A::DbError: std::fmt::Debug {
     /// 
     /// This function must only be used during tests, as it inherently creates
     /// a backdoor which bypasses authentication.
-    fn with_test_auth(self, app: &mut A, user_id: A::ID) -> impl std::future::Future<Output = Self>;
+    fn with_test_auth(self, app: &mut A, user_id: A::UserID) -> impl std::future::Future<Output = Self>;
 
     /// Creates an `Auth` struct representing an authenticated request for the
     /// given user, and inserts it into this request's extension data. Note
@@ -46,7 +46,7 @@ where A::DbError: std::fmt::Debug {
     /// 
     /// This function must only be used during tests, as it inherently creates
     /// a backdoor which bypasses authentication.
-    fn with_existing_test_auth(self, app: &mut A, user_id: A::ID, session_id: A::ID) -> impl std::future::Future<Output = Self>;
+    fn with_existing_test_auth(self, app: &mut A, user_id: A::UserID, session_id: A::SessionID) -> impl std::future::Future<Output = Self>;
 }
 
 pub trait WithTestSession<A: App>
@@ -56,12 +56,12 @@ where A::DbError: std::fmt::Debug {
     /// 
     /// This function must only be used during tests, as it inherently creates
     /// a backdoor which bypasses authentication.
-    fn with_test_session(self, app: &mut A, user_id: A::ID) -> impl std::future::Future<Output = Self>;
+    fn with_test_session(self, app: &mut A, user_id: A::UserID) -> impl std::future::Future<Output = Self>;
 }
 
 impl <R: actix_web::HttpMessage, A: App> WithTestAuth<A> for R
 where A::DbError: std::fmt::Debug {
-    async fn with_test_auth(self, app: &mut A, user_id: A::ID) -> Self {
+    async fn with_test_auth(self, app: &mut A, user_id: A::UserID) -> Self {
         let (_, auth) = create_test_session(app, user_id).await;
         auth.into_maybe_auth()
             .insert_into_request(&self);
@@ -69,7 +69,7 @@ where A::DbError: std::fmt::Debug {
         self
     }
 
-    async fn with_existing_test_auth(self, app: &mut A, user_id: <A>::ID, session_id: <A>::ID) -> Self {
+    async fn with_existing_test_auth(self, app: &mut A, user_id: <A>::UserID, session_id: <A>::SessionID) -> Self {
         let user_data = _get_user_data(app, user_id).await;
         let auth = Auth::<A> {
             user: user_data.user,
@@ -86,7 +86,7 @@ where A::DbError: std::fmt::Debug {
 
 impl <R: WithCookie, A: App> WithTestSession<A> for R
 where A::DbError: std::fmt::Debug {
-    async fn with_test_session(self, app: &mut A, user_id: A::ID) -> Self {
+    async fn with_test_session(self, app: &mut A, user_id: A::UserID) -> Self {
         let (token, _) = create_test_session(app, user_id).await;
         
         self.with_cookie(Cookie::new(
@@ -112,7 +112,7 @@ impl WithCookie for awc::ClientRequest {
     }
 }
 
-async fn _get_user_data<A: App>(app: &mut A, user_id: A::ID) -> UserData<A>
+async fn _get_user_data<A: App>(app: &mut A, user_id: A::UserID) -> UserData<A>
 where A::DbError: std::fmt::Debug {
     app.get_user_data_by_id(user_id)
         .await

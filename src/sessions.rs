@@ -243,7 +243,7 @@ pub(crate) async fn authenticate_by_session_token<A: App>(
 ///
 /// Returns the new session id and token. An `AuthTokenAction` must be inserted
 /// into the request in order to issue the new session token cookie.
-pub(crate) async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<(A::ID, Secret), A::Error> {
+pub(crate) async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) -> Result<(A::SessionID, Secret), A::Error> {
     let (session_token, hash) = hashing::generate_session_token_and_hash();
     let session_id = app.insert_session(user, hash, expiry_time(app))
         .await
@@ -256,7 +256,7 @@ pub(crate) async fn begin_session_for_user<A: App>(app: &mut A, user: &A::User) 
 
 /// Renews the session with the given id, updates the session in the database,
 /// and returns the new session token.
-async fn renew_by_id<A: App>(app: &mut A, session_id: A::ID) -> Result<Secret, A::Error> {
+async fn renew_by_id<A: App>(app: &mut A, session_id: A::SessionID) -> Result<Secret, A::Error> {
     log::debug!("Renewing session {}", session_id);
 
     let (session_token, hash) = hashing::generate_session_token_and_hash();

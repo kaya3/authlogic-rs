@@ -18,7 +18,7 @@ use crate::{
 pub struct Auth<A: App> {
     pub user: A::User,
     pub user_state: UserState,
-    pub session_id: A::ID,
+    pub session_id: A::SessionID,
 
     /// Forbid construction of this struct outside of this crate, to ensure
     /// correct usage.

@@ -14,14 +14,20 @@ pub trait App: AppConfig + AppDb + AppMailer + AppTypes + 'static {
 }
 
 pub trait AppTypes: Sized {
-    /// The type of a numeric ID in the database; usually `i64`, `i32`, etc.
-    type ID: Copy + Eq + std::fmt::Display + ToFromStr;
+    /// The type of a challenge ID in the database; usually `i64`, `i32`, etc.
+    type ChallengeID: Copy + Eq + std::fmt::Display + ToFromStr;
 
+    /// The type of a session ID in the database; usually `i64`, `i32`, etc.
+    type SessionID: Copy + Eq + std::fmt::Display + ToFromStr;
+
+    /// The type of a user ID in the database; usually `i64`, `i32`, etc.
+    type UserID: Copy + Eq + std::fmt::Display;
+    
     /// The type used to represent a date and time in the application.
     type DateTime: Copy + Ord + core::ops::Add<std::time::Duration, Output = Self::DateTime>;
 
     /// The type of a user in the application.
-    type User: HasUserID<Self::ID> + Clone;
+    type User: HasUserID<Self::UserID> + Clone;
 
     /// A type representing custom email challenges which can be issued by the
     /// application. Use `authlib::mail::NoCustomChallenges` if there are none.
@@ -95,7 +101,7 @@ pub trait AppDb: AppTypes {
     /// Returns `None` if there is no user with that identifier.
     async fn get_user_data_by_id(
         &mut self,
-        user_id: Self::ID,
+        user_id: Self::UserID,
     ) -> Result<Option<UserData<Self>>, Self::DbError>;
 
     /// Indicates whether a given user identifier (e.g. username or email)
@@ -118,7 +124,7 @@ pub trait AppDb: AppTypes {
     async fn insert_user(
         &mut self,
         user_data: UserData<Self>,
-    ) -> Result<Self::ID, Self::DbError>;
+    ) -> Result<Self::UserID, Self::DbError>;
 
     /// Updates an unverified user to mark them as verified.
     async fn verify_user(&mut self, user: &Self::User) -> Result<(), Self::DbError>;
@@ -134,7 +140,7 @@ pub trait AppDb: AppTypes {
 
     /// Deletes a user by their id, if they exist. It is not an error to
     /// attempt to delete a non-existent user.
-    async fn delete_user(&mut self, user_id: Self::ID) -> Result<(), Self::DbError>;
+    async fn delete_user(&mut self, user_id: Self::UserID) -> Result<(), Self::DbError>;
 
     /// Gets the data for a session, including the user, whether the user is
     /// active, the session token hash, and the session expiry time.
@@ -142,7 +148,7 @@ pub trait AppDb: AppTypes {
     /// Returns `None` if there is no session with that id.
     async fn get_session_by_id(
         &mut self,
-        session_id: Self::ID,
+        session_id: Self::SessionID,
     ) -> Result<Option<SessionData<Self>>, Self::DbError>;
 
     /// Inserts a new session, returning the new session's unique id.
@@ -151,19 +157,19 @@ pub trait AppDb: AppTypes {
         user: &Self::User,
         token_hash: Secret,
         expires: Self::DateTime,
-    ) -> Result<Self::ID, Self::DbError>;
+    ) -> Result<Self::SessionID, Self::DbError>;
 
     /// Updates a session's stored token hash and expiry time.
     async fn update_session_by_id(
         &mut self,
-        session_id: Self::ID,
+        session_id: Self::SessionID,
         new_token_hash: Secret,
         expires: Self::DateTime,
     ) -> Result<(), Self::DbError>;
 
     /// Deletes a session by its id, if it exists. It is not an error to
     /// attempt to delete a non-existent session.
-    async fn delete_session_by_id(&mut self, session_id: Self::ID) -> Result<(), Self::DbError>;
+    async fn delete_session_by_id(&mut self, session_id: Self::SessionID) -> Result<(), Self::DbError>;
 
     /// Gets the data for a challenge, including the user, the challenge type,
     /// the challenge code hash, and the challenge expiry time.
@@ -171,7 +177,7 @@ pub trait AppDb: AppTypes {
     /// Returns `None` if there is no challenge with that id.
     async fn get_challenge_by_id(
         &mut self,
-        challenge_id: Self::ID,
+        challenge_id: Self::ChallengeID,
     ) -> Result<Option<ChallengeData<Self>>, Self::DbError>;
 
     /// Inserts a new challenge, returning the new challenge's id.
@@ -181,11 +187,11 @@ pub trait AppDb: AppTypes {
         challenge: &str,
         code_hash: Secret,
         expires: Self::DateTime,
-    ) -> Result<Self::ID, Self::DbError>;
+    ) -> Result<Self::ChallengeID, Self::DbError>;
 
     /// Deletes a challenge by its id, if it exists. It is not an error to
     /// attempt to delete a non-existent challenge.
-    async fn delete_challenge_by_id(&mut self, challenge_id: Self::ID) -> Result<(), Self::DbError>;
+    async fn delete_challenge_by_id(&mut self, challenge_id: Self::ChallengeID) -> Result<(), Self::DbError>;
 }
 
 /// This trait defines functions which will be used by the authentication
