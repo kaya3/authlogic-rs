@@ -170,7 +170,7 @@ pub enum PasswordChangeOutcome {
     IncorrectPassword,
     
     /// Indicates that the user chose a password which is shorter than
-    /// `AppConfig::minimum_password_length()`.
+    /// `<A as AppConfig>::minimum_password_length()`.
     NewPasswordTooShort,
     
     /// Indicates that the user chose a new password which is the same as the
@@ -247,7 +247,7 @@ pub enum RegistrationOutcome<A: App> {
     IdentifierAlreadyExists,
     
     /// Indicates that the user chose a password which is shorter than
-    /// `AppConfig::minimum_password_length()`.
+    /// `<A as AppConfig>::minimum_password_length()`.
     PasswordTooShort,
 }
 
