@@ -44,6 +44,40 @@ macro_rules! impl_for_numbers {
 
 impl_for_numbers!(i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize);
 
+#[allow(unused_macros)]
+macro_rules! impl_for_from_str_display {
+    ($($ty: ty),+, $excluded: literal) => {
+        $(
+            impl ToFromStr for $ty {
+                const EXCLUDED: char = $excluded;
+                
+                #[inline(always)]
+                fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    std::fmt::Display::fmt(self, fmt)
+                }
+                
+                #[inline(always)]
+                fn try_parse(hex_str: &str) -> Option<Self> {
+                    <$ty as std::str::FromStr>::from_str(hex_str).ok()
+                }
+            }
+        )+
+    }
+}
+
+#[cfg(feature = "ferroid")] impl_for_from_str_display!(
+    ferroid::id::ULID,
+    ferroid::id::SnowflakeDiscordId,
+    ferroid::id::SnowflakeInstagramId,
+    ferroid::id::SnowflakeMastodonId,
+    ferroid::id::SnowflakeTwitterId,
+    '.'
+);
+#[cfg(feature = "svix-ksuid")] impl_for_from_str_display!(svix_ksuid::Ksuid, '.');
+#[cfg(feature = "ulid")] impl_for_from_str_display!(ulid::Ulid, '.');
+#[cfg(feature = "uuid")] impl_for_from_str_display!(uuid::Uuid, '.');
+#[cfg(feature = "xid")] impl_for_from_str_display!(xid::Id, '.');
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -108,5 +142,76 @@ mod test {
         assert_eq!(Some(0x12345678i32), i32::try_parse("12345678"));
         assert_eq!(Some(0x123456789ABCDEF0i64), i64::try_parse("123456789abcdef0"));
         assert_eq!(Some(0x123456789ABCDEF0123456789ABCDEF0i128), i128::try_parse("123456789abcdef0123456789abcdef0"));
+    }
+    
+    #[cfg(feature = "ferroid")]
+    #[test]
+    fn ferroid_round_trip() {
+        use std::str::FromStr;
+        
+        let id = ferroid::id::SnowflakeDiscordId::from_str("00000F280001A").unwrap();
+        let id_str = dump(id);
+        assert_eq!("00000F280001A", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+        
+        let id = ferroid::id::SnowflakeInstagramId::from_str("00000F280001A").unwrap();
+        let id_str = dump(id);
+        assert_eq!("00000F280001A", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+        
+        let id = ferroid::id::SnowflakeMastodonId::from_str("00000F280001A").unwrap();
+        let id_str = dump(id);
+        assert_eq!("00000F280001A", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+        
+        let id = ferroid::id::SnowflakeTwitterId::from_str("00000F280001A").unwrap();
+        let id_str = dump(id);
+        assert_eq!("00000F280001A", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+        
+        let id = ferroid::id::ULID::from_str("0000003RJ0000000000000001A").unwrap();
+        let id_str = dump(id);
+        assert_eq!("0000003RJ0000000000000001A", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+    }
+    
+    #[cfg(feature = "svix-ksuid")]
+    #[test]
+    fn svix_ksuid_round_trip() {
+        use std::str::FromStr;
+        let id = svix_ksuid::Ksuid::from_str("1srOrx2ZWZBpBUvZwXKQmoEYga2").unwrap();
+        let id_str = dump(id);
+        assert_eq!("1srOrx2ZWZBpBUvZwXKQmoEYga2", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+    }
+    
+    #[cfg(feature = "ulid")]
+    #[test]
+    fn ulid_round_trip() {
+        use std::str::FromStr;
+        let id = ulid::Ulid::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        let id_str = dump(id);
+        assert_eq!("01ARZ3NDEKTSV4RRFFQ69G5FAV", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+    }
+    
+    #[cfg(feature = "uuid")]
+    #[test]
+    fn uuid_round_trip() {
+        use std::str::FromStr;
+        let id = uuid::Uuid::from_str("8be4df61-93ca-11d2-aa0d-00e098032b8c").unwrap();
+        let id_str = dump(id);
+        assert_eq!("8be4df61-93ca-11d2-aa0d-00e098032b8c", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
+    }
+    
+    #[cfg(feature = "xid")]
+    #[test]
+    fn xid_round_trip() {
+        use std::str::FromStr;
+        let id = xid::Id::from_str("9m4e2mr0ui3e8a215n4g").unwrap();
+        let id_str = dump(id);
+        assert_eq!("9m4e2mr0ui3e8a215n4g", id_str);
+        assert_eq!(Some(id), ToFromStr::try_parse(&id_str));
     }
 }
