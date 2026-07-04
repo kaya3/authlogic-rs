@@ -6,6 +6,7 @@ mod maybe_auth;
 mod middleware;
 mod secret;
 mod sessions;
+mod to_from_str;
 mod token_actions;
 mod tokens;
 mod users;
@@ -38,6 +39,7 @@ pub use sessions::{
     SessionData,
     login,
 };
+pub use to_from_str::ToFromStr;
 pub use users::{
     PasswordChangeOutcome,
     RegistrationOutcome,

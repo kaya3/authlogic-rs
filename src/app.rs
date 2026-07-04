@@ -3,6 +3,7 @@ use crate::{
     mail::{Challenge, ChallengeData, Notification},
     secret::{PasswordHash, Secret},
     sessions::SessionData,
+    to_from_str::ToFromStr,
     users::{UserData, HasUserID},
     NIST_MINIMUM_PASSWORD_LENGTH,
 };
@@ -14,7 +15,7 @@ pub trait App: AppConfig + AppDb + AppMailer + AppTypes + 'static {
 
 pub trait AppTypes: Sized {
     /// The type of a numeric ID in the database; usually `i64`, `i32`, etc.
-    type ID: Into<i64> + TryFrom<i64> + Eq + Copy + std::fmt::Display;
+    type ID: Copy + Eq + std::fmt::Display + ToFromStr;
 
     /// The type used to represent a date and time in the application.
     type DateTime: Copy + Ord + core::ops::Add<std::time::Duration, Output = Self::DateTime>;
