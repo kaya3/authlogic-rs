@@ -25,8 +25,6 @@ pub use errors::Error;
 pub use maybe_auth::{
     Auth,
     MaybeAuth,
-    maybe_auth_from_request,
-    require_auth_from_request,
     require_user_from_request,
 };
 pub use middleware::middleware;

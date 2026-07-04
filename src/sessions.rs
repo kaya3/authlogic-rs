@@ -10,7 +10,7 @@ use actix_web::{
 use crate::{
     app::{App, AppTypes},
     hashing,
-    maybe_auth::{maybe_auth_from_request, Auth, MaybeAuth},
+    maybe_auth::{Auth, MaybeAuth},
     secret::Secret,
     token_actions::AuthTokenAction,
     tokens,
@@ -132,7 +132,7 @@ pub(crate) async fn on_successful_challenge<A: App>(
     user: &A::User,
     request: &HttpRequest,
 ) -> Result<(), A::Error> {
-    let maybe_auth = maybe_auth_from_request::<A>(request);
+    let maybe_auth = MaybeAuth::<A>::from_request(request);
 
     let new_session_token = match maybe_auth {
         MaybeAuth::Authenticated(auth) if auth.user.id() == user.id() => {

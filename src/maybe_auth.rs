@@ -35,12 +35,32 @@ pub enum MaybeAuth<A: App> {
 }
 
 impl<A: App> Auth<A> {
+    /// Gets the authenticated state for the request, or returns an error if
+    /// the request is not authenticated. This can be called from route
+    /// handlers, or `actix_web::FromRequest` implementations.
+    pub fn require_from_request(request: &impl HttpMessage) -> Result<Auth<A>, A::Error> {
+        MaybeAuth::<A>::from_request(request)
+            .require()
+    }
+    
     pub fn into_maybe_auth(self) -> MaybeAuth<A> {
         MaybeAuth::Authenticated(self)
     }
 }
 
 impl<A: App> MaybeAuth<A> {
+    /// Gets the authentication state for the request. This can be called from
+    /// route handlers, or `actix_web::FromRequest` implementations.
+    pub fn from_request(request: &impl HttpMessage) -> MaybeAuth<A> {
+        let exts = request.extensions();
+        let auth = exts.get::<Auth<A>>();
+        
+        match auth {
+            Some(auth) => MaybeAuth::Authenticated(auth.clone()),
+            None => MaybeAuth::Unauthenticated,
+        }
+    }
+    
     /// Requires that the user is authenticated and "ready", otherwise returns
     /// an error.
     pub fn require(self) -> Result<Auth<A>, A::Error> {
@@ -69,16 +89,33 @@ impl<A: App> MaybeAuth<A> {
     }
 
     /// Gets the authenticated user, if there is one and they are "ready".
-    pub fn user(self) -> Option<A::User> {
+    pub fn user(&self) -> Option<&A::User> {
+        match self {
+            Self::Authenticated(auth) if auth.user_state.is_ready() => Some(&auth.user),
+            _ => None,
+        }
+    }
+
+    /// Gets the authenticated user, if there is one and they are "ready".
+    pub fn into_user(self) -> Option<A::User> {
         match self {
             Self::Authenticated(auth) if auth.user_state.is_ready() => Some(auth.user),
             _ => None,
         }
     }
-    
+
     /// Gets the authenticated user, if there is one, even if they are not
     /// "ready".
-    pub fn user_even_if_not_ready(self) -> Option<A::User> {
+    pub fn user_even_if_not_ready(&self) -> Option<&A::User> {
+        match self {
+            Self::Authenticated(auth) => Some(&auth.user),
+            Self::Unauthenticated => None,
+        }
+    }
+
+    /// Gets the authenticated user, if there is one, even if they are not
+    /// "ready".
+    pub fn into_user_even_if_not_ready(self) -> Option<A::User> {
         match self {
             Self::Authenticated(auth) => Some(auth.user),
             Self::Unauthenticated => None,
@@ -95,36 +132,11 @@ impl<A: App> MaybeAuth<A> {
     }
 }
 
-/// Gets the authentication state for the request. This can be called from
-/// route handlers, or `actix_web::FromRequest` implementations.
-pub fn maybe_auth_from_request<A: App>(request: &impl HttpMessage) -> MaybeAuth<A> {
-    let exts = request.extensions();
-    let auth = exts.get::<Auth<A>>();
-    
-    match auth {
-        Some(auth) => MaybeAuth::Authenticated(Auth {
-            user: auth.user.clone(),
-            user_state: auth.user_state,
-            session_id: auth.session_id,
-            _deny_public_constructor: (),
-        }),
-        None => MaybeAuth::Unauthenticated,
-    }
-}
-
-/// Gets the authenticated state for the request, or returns an error if
-/// the request is not authenticated. This can be called from route
-/// handlers, or `actix_web::FromRequest` implementations.
-pub fn require_auth_from_request<A: App>(request: &impl HttpMessage) -> Result<Auth<A>, A::Error> {
-    maybe_auth_from_request::<A>(request)
-        .require()
-}
-
 /// Gets the authenticated and "ready" user for the request, or returns an
 /// error if the request is not authenticated or the user is not "ready". This
 /// can be called from route handlers, or `actix_web::FromRequest` implementations.
 pub fn require_user_from_request<A: App>(request: &impl HttpMessage) -> Result<A::User, A::Error> {
-    require_auth_from_request::<A>(request)
+    Auth::<A>::require_from_request(request)
         .map(|auth| auth.user)
 }
 
@@ -164,7 +176,7 @@ impl<A: App> FromRequest for MaybeAuth<A> {
     type Future = std::future::Ready<Result<Self, Infallible>>;
 
     fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let auth = maybe_auth_from_request(request);
+        let auth = Self::from_request(request);
         std::future::ready(Ok(auth))
     }
 }
@@ -174,7 +186,7 @@ impl<A: App> FromRequest for Auth<A> {
     type Future = std::future::Ready<Result<Self, A::Error>>;
 
     fn from_request(request: &HttpRequest, _payload: &mut Payload) -> Self::Future {
-        let result = require_auth_from_request(request);
+        let result = Auth::<A>::require_from_request(request);
         std::future::ready(result)
     }
 }
