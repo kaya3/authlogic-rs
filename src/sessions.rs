@@ -14,7 +14,7 @@ use crate::{
     secret::Secret,
     token_actions::AuthTokenAction,
     tokens,
-    users::{UserID, UserState},
+    users::{HasUserID, UserState},
 };
 
 #[cfg_attr(feature = "diesel", derive(QueryableByName))]

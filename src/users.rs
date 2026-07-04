@@ -12,7 +12,7 @@ use crate::{
     secret::{PasswordHash, Secret},
 };
 
-pub trait UserID<T> {
+pub trait HasUserID<T> {
     /// Gets the user's id field.
     fn id(&self) -> T;
 

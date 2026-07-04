@@ -3,7 +3,7 @@ use crate::{
     mail::{Challenge, ChallengeData, Notification},
     secret::{PasswordHash, Secret},
     sessions::SessionData,
-    users::{UserData, UserID},
+    users::{UserData, HasUserID},
     NIST_MINIMUM_PASSWORD_LENGTH,
 };
 
@@ -20,7 +20,7 @@ pub trait AppTypes: Sized {
     type DateTime: Copy + Ord + core::ops::Add<std::time::Duration, Output = Self::DateTime>;
 
     /// The type of a user in the application.
-    type User: UserID<Self::ID> + Clone;
+    type User: HasUserID<Self::ID> + Clone;
 
     /// A type representing custom email challenges which can be issued by the
     /// application. Use `authlib::mail::NoCustomChallenges` if there are none.

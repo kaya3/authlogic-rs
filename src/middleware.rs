@@ -8,11 +8,11 @@ use actix_web::{
 };
 
 use crate::{
-    app::App,
+    app::{App, AppTypes},
     maybe_auth::MaybeAuth,
     sessions::authenticate_by_session_token,
     token_actions::AuthTokenAction,
-    users::UserID, AppTypes,
+    users::HasUserID,
 };
 
 pub async fn middleware<A: App>(

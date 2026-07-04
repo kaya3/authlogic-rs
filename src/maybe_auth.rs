@@ -10,7 +10,7 @@ use actix_web::{
 use crate::{
     app::App,
     errors::Error,
-    UserID,
+    HasUserID,
     UserState,
 };
 

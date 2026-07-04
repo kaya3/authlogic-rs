@@ -42,7 +42,7 @@ pub use users::{
     PasswordChangeOutcome,
     RegistrationOutcome,
     UserData,
-    UserID,
+    HasUserID,
     UserState,
     change_password,
     register_new_user,

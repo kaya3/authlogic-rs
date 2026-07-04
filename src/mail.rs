@@ -10,7 +10,7 @@ use crate::{
     secret::{PasswordHash, Secret},
     sessions,
     tokens,
-    users::{UserID, UserState},
+    users::{HasUserID, UserState},
 };
 
 /// A type of notification which can be sent to a user by email.
