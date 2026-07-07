@@ -159,8 +159,8 @@ fn fast_hash(s: &Secret) -> Secret {
 
     let mut hasher = Sha256::new();
     hasher.update(&s.0);
-    let hash = &hasher.finalize();
-    Secret(base64_encode(hash))
+    let mut hash = hasher.finalize();
+    base64_encode_and_zeroize(&mut hash)
 }
 
 /// Generates a random token with `N` bytes of entropy, base64-encoded. The
@@ -173,13 +173,19 @@ fn generate_base64_token<const N: usize>() -> Secret {
 fn _generate_base64_token(buffer: &mut [u8]) -> Secret {
     use rand::{rng, RngExt};
     rng().fill(buffer);
-    Secret(base64_encode(buffer))
+    base64_encode_and_zeroize(buffer)
 }
 
-fn base64_encode(bytes: &[u8]) -> String {
+fn base64_encode_and_zeroize(bytes: &mut [u8]) -> Secret {
     // Challenge codes will be used in URLs
     use base64::{engine::general_purpose::URL_SAFE, Engine};
-    URL_SAFE.encode(bytes)
+    let encoded = URL_SAFE.encode::<&mut [u8]>(bytes);
+
+    // Zero out the old buffer to avoid leaking
+    use zeroize::Zeroize;
+    bytes.zeroize();
+
+    Secret(encoded)
 }
 
 #[cfg(test)]
