@@ -156,7 +156,8 @@ pub async fn register_new_user_with_temporary_password<A: App>(
     app: &mut A,
     user: A::User,
 ) -> Result<RegistrationOutcome<A>, A::Error> {
-    let (password, hash) = hashing::generate_password_and_hash()?;
+    let length = app.minimum_password_length();
+    let (password, hash) = hashing::generate_password_and_hash(length)?;
     
     register(app, user, None, Some(password), hash)
         .await

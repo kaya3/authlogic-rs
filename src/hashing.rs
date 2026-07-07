@@ -18,8 +18,14 @@ pub const SESSION_TOKEN_BYTES: usize = 18;
 /// The number of bytes of entropy in a new challenge code.
 pub const CHALLENGE_CODE_BYTES: usize = 18;
 
-/// The number of bytes of entropy in a new temporary password.
-pub const TEMPORARY_PASSWORD_BYTES: usize = 9;
+/// The characters which can be used to generate a new temporary password.
+/// Includes upper- and lowercase letters and digits, but not lookalikes
+/// (o, O, 0, i, I, l, 1).
+pub const TEMPORARY_PASSWORD_ALPHABET: &'static [char] = &[
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'j', 'k',      'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '2', '3', '4', '5', '6', '7', '8', '9',
+];
 
 /// Checks a password against a stored password hash, returning `true` if the
 /// password is correct, and `false` if it is incorrect or if the stored hash
@@ -79,8 +85,17 @@ pub(crate) fn generate_password_hash(new_password: &Secret) -> Result<PasswordHa
 ///
 /// Use the `check_password` function to compare a password against a stored
 /// hash.
-pub(crate) fn generate_password_and_hash() -> Result<(Secret, PasswordHash), Error> {
-    let raw = generate_base64_token::<TEMPORARY_PASSWORD_BYTES>();
+pub(crate) fn generate_password_and_hash(length: usize) -> Result<(Secret, PasswordHash), Error> {
+    use rand::distr::{Distribution, slice};
+
+    let alphabet_distribution = slice::Choose::new(TEMPORARY_PASSWORD_ALPHABET)
+        .expect("Failed to construct temporary password alphabet");
+
+    let raw = Secret(alphabet_distribution
+        .sample_iter(&mut rand::rng())
+        .take(length)
+        .collect());
+
     let hash = generate_password_hash(&raw)?;
 
     Ok((raw, hash))
@@ -165,8 +180,11 @@ fn base64_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod test {
     use super::{
-        check_fast_hash, fast_hash, generate_password_hash, generate_token_and_fast_hash,
-        check_password, Secret,
+        check_fast_hash, fast_hash,
+        generate_password_and_hash, generate_password_hash, generate_token_and_fast_hash,
+        check_password,
+        Secret,
+        TEMPORARY_PASSWORD_ALPHABET,
     };
 
     #[test]
@@ -203,5 +221,17 @@ mod test {
         assert!(!check_fast_hash(&secret2, &hash1));
         assert!(!check_fast_hash(&secret1, &hash2));
         assert!(check_fast_hash(&secret2, &hash2));
+    }
+
+    #[test]
+    fn test_generate_password_and_hash() {
+        let (password, hash) = generate_password_and_hash(8).expect("Should generate password and hash");
+
+        assert!(check_password(&hash, &password).expect("Generated password should verify"));
+
+        assert_eq!(8, password.0.len());
+        for c in password.0.chars() {
+            assert!(TEMPORARY_PASSWORD_ALPHABET.contains(&c), "Invalid alphabet for generated password '{}'", &password.0);
+        }
     }
 }
