@@ -40,6 +40,8 @@ impl ZeroizeOnDrop for Secret {}
 impl PasswordHash {
     pub const NONE: Self = Self(None);
     
+    /// Indicates whether a password hash is present. It may not be, if the
+    /// user does not have password authentication enabled.
     pub fn exists(&self) -> bool {
         self.0.is_some()
     }

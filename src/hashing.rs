@@ -57,7 +57,11 @@ pub(crate) fn check_password(stored_hash: &PasswordHash, given_password: &Secret
         match result {
             Ok(()) => return Ok(true),
             Err(E::PasswordInvalid) => return Ok(false),
-            Err(_) => continue,
+            Err(E::Algorithm) => continue,
+            Err(e) => {
+                log::error!("Error while verifying pasword: {e:?}");
+                continue;
+            },
         }
     }
 
@@ -73,11 +77,12 @@ pub(crate) fn generate_password_hash(new_password: &Secret) -> Result<PasswordHa
     use argon2::{Argon2, PasswordHasher};
 
     let salt = phc::Salt::from_rng(&mut rand::rng());
-    let hash = Argon2::default()
+    let hash = Secret(Argon2::default()
         .hash_password_with_salt(new_password.expose().as_bytes(), &salt)
-        .map_err(Error::NewPasswordHash)?;
+        .map_err(Error::NewPasswordHash)?
+        .to_string());
     
-    Ok(PasswordHash(Some(Secret(hash.to_string()))))
+    Ok(PasswordHash(Some(hash)))
 }
 
 /// Randomly generates a new password, returning it and its hash. A strong
@@ -201,10 +206,12 @@ mod test {
     fn test_token_hash() {
         let (raw, hash) = generate_token_and_fast_hash::<18>();
 
+        assert_eq!(24, raw.0.len());
         assert_eq!(
             &hash.0,
             &fast_hash(&raw).0,
-            "Hash of raw token should equal the generated hash",
+            "Hash of raw token '{}' should equal the generated hash",
+            &raw.0,
         );
         assert!(check_fast_hash(&raw, &hash));
     }
