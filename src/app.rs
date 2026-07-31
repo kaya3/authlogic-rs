@@ -78,12 +78,30 @@ pub trait AppConfig {
     fn session_token_cookie_name(&self) -> &str {
         "session"
     }
+    
+    /// Returns the domain, if any, which will be used in the `Set-Cookie`
+    /// header for the session token cookie.
+    /// 
+    /// Default is `None`.
+    fn session_token_cookie_domain(&self) -> Option<&str> {
+        None
+    }
+    
+    /// Returns the path which will be used in the `Set-Cookie` header for the
+    /// session token cookie.
+    /// 
+    /// Default is `"/"`.
+    fn session_token_cookie_path(&self) -> &str {
+        "/"
+    }
 
     /// Indicates whether a `Same-Site: strict` header should be sent with the
     /// session cookie. If `false`, a `Same-Site: lax` header will be sent
     /// instead.
     ///
     /// Default is `false`.
+    /// 
+    /// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie#samesitesamesite-value
     fn session_token_cookie_same_site_strict(&self) -> bool {
         false
     }

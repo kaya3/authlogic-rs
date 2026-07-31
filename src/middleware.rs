@@ -54,36 +54,13 @@ pub async fn middleware<A: App>(
     // Issue or revoke the cookie, if necessary. If an action is inserted into
     // the request object, perform that action; otherwise perform the action
     // indicated by the earlier call to `authenticate_by_session_token`.
-    let cookie_name = A::session_token_cookie_name(&app);
-
     match AuthTokenAction::take_from_request(response.request()) {
         AuthTokenAction::Issue(token) => {
             log::debug!("Issuing session cookie");
 
-            // Issue a cookie with the appropriate attributes
-            // https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies
-            let mut cookie = Cookie::new(cookie_name, token.expose());
+            let mut cookie = new_session_cookie(&app, token.expose());
 
-            // HTTP-only cookies are not visible to client-side JavaScript.
-            cookie.set_http_only(true);
-
-            // Only send this cookie over HTTPS connections.
-            cookie.set_secure(true);
-
-            cookie.set_same_site(if A::session_token_cookie_same_site_strict(&app) {
-                // The client should only send this cookie when making requests
-                // from the same site.
-                SameSite::Strict
-            } else {
-                // The client should only send this cookie when making requests
-                // from the same site, or when making safe requests from other
-                // sites (e.g. GET requests by following links).
-                SameSite::Lax
-            });
-
-            // TODO: Domain and Path options
-
-            let duration = Duration::hours(A::session_expire_after_hours(&app) as i64);
+            let duration = Duration::hours(app.session_expire_after_hours() as i64);
             cookie.set_max_age(duration);
 
             response.response_mut()
@@ -93,7 +70,7 @@ pub async fn middleware<A: App>(
             log::debug!("Revoking session cookie");
 
             // Revoke cookie by setting new empty cookie of the same name.
-            let cookie = Cookie::new(cookie_name, "");
+            let cookie = new_session_cookie(&app, "");
             response.response_mut()
                 .add_removal_cookie(&cookie)?;
         }
@@ -101,4 +78,36 @@ pub async fn middleware<A: App>(
     }
 
     Ok(response)
+}
+
+/// Creates a cookie with the appropriate attributes.
+/// https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html#cookies
+fn new_session_cookie<'a, A: App>(app: &'a A, token: &'a str) -> Cookie<'a> {
+    let cookie_name = app.session_token_cookie_name();
+    let mut cookie = Cookie::new(cookie_name, token);
+    
+    if let Some(domain) = app.session_token_cookie_domain() {
+        cookie.set_domain(domain);
+    }
+    
+    cookie.set_path(app.session_token_cookie_path());
+    
+    // HTTP-only cookies are not visible to client-side JavaScript.
+    cookie.set_http_only(true);
+
+    // Only send this cookie over HTTPS connections.
+    cookie.set_secure(true);
+
+    cookie.set_same_site(if app.session_token_cookie_same_site_strict() {
+        // The client should only send this cookie when making requests
+        // from the same site.
+        SameSite::Strict
+    } else {
+        // The client should only send this cookie when making requests
+        // from the same site, or when making safe requests from other
+        // sites (e.g. GET requests by following links).
+        SameSite::Lax
+    });
+
+    cookie
 }
