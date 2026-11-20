@@ -17,7 +17,7 @@ base64 = "0.22.1"
 constant_time_eq = "0.5.0"
 diesel = { version = "2.3.9", optional = true }
 diesel-derive-newtype = { version = "2.1.2", optional = true }
-ferroid = { version = "2.0.0", features = ["base32", "snowflake", "ulid"], optional = true }
+ferroid = { version = "3.1.1", features = ["base32", "snowflake", "ulid"], optional = true }
 log = "0.4.29"
 password-hash = { version = "0.6.1", features = ["rand_core"] }
 pbkdf2 = { version = "0.13.0", features = ["sha2", "phc"], optional = true }
